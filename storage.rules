@@ -1,0 +1,32 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isHouseholdMember(hId) {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/households/$(hId)/members/$(request.auth.uid));
+    }
+
+    // Profile avatars — public read (shown to your partner), self-write only
+    match /users/{uid}/avatar/{file} {
+      allow read: if true;
+      allow write: if signedIn() && request.auth.uid == uid
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Household receipts & attachments — members only
+    match /households/{hId}/{allPaths=**} {
+      allow read: if isHouseholdMember(hId);
+      allow write: if isHouseholdMember(hId)
+        && request.resource.size < 10 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*')
+            || request.resource.contentType.matches('application/pdf'));
+    }
+  }
+}

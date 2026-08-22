@@ -1,0 +1,40 @@
+{
+  "name": "Our Money — Couple Budget",
+  "short_name": "Our Money",
+  "description": "Two people. One financial picture. A couple-first budget & money management app.",
+  "id": "/",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F3F5F7",
+  "theme_color": "#F3F5F7",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add expense",
+      "url": "/dashboard?add=expense"
+    },
+    {
+      "name": "Transactions",
+      "url": "/transactions"
+    },
+    {
+      "name": "Goals",
+      "url": "/goals"
+    }
+  ]
+}

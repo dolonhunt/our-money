@@ -1,0 +1,348 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   Design tokens — Modern Neumorphic Soft-3D Finance UI (PRD §8)
+   ============================================================ */
+
+:root {
+  --c-bg: #f3f5f7;
+  --c-surface: #f8fafa;
+  --c-surface-2: #ffffff;
+  --c-text: #263238;
+  --c-text-sub: #6b7478;
+  --c-text-faint: #9aa6ab;
+  --c-mint: #8aced1;
+  --c-teal: #57bfc4;
+  --c-teal-deep: #3aa9af;
+  --c-peach: #f4b27a;
+  --c-orange: #efa15f;
+  --c-amber: #d9a02b;
+  --c-danger: #d96a5c;
+  --c-border: rgba(38, 50, 56, 0.08);
+  --c-track: rgba(38, 50, 56, 0.07);
+
+  --shadow-raised: 10px 10px 24px rgba(163, 177, 198, 0.42), -10px -10px 24px rgba(255, 255, 255, 0.95);
+  --shadow-raised-sm: 5px 5px 12px rgba(163, 177, 198, 0.38), -5px -5px 12px rgba(255, 255, 255, 0.9);
+  --shadow-pop: 0 12px 28px rgba(87, 191, 196, 0.35);
+  --shadow-pop-peach: 0 12px 28px rgba(239, 161, 95, 0.35);
+  --shadow-inset: inset 5px 5px 12px rgba(163, 177, 198, 0.42), inset -5px -5px 12px rgba(255, 255, 255, 0.95);
+  --shadow-inset-sm: inset 3px 3px 7px rgba(163, 177, 198, 0.35), inset -3px -3px 7px rgba(255, 255, 255, 0.85);
+}
+
+[data-theme="dark"] {
+  --c-bg: #262b30;
+  --c-surface: #2c3238;
+  --c-surface-2: #333a41;
+  --c-text: #e9edf0;
+  --c-text-sub: #a6b0b5;
+  --c-text-faint: #77828a;
+  --c-mint: #7fcbce;
+  --c-teal: #57bfc4;
+  --c-teal-deep: #43b0b6;
+  --c-peach: #f2b27e;
+  --c-orange: #efa15f;
+  --c-amber: #d9a02b;
+  --c-danger: #e07862;
+  --c-border: rgba(233, 237, 240, 0.09);
+  --c-track: rgba(233, 237, 240, 0.08);
+
+  --shadow-raised: 10px 10px 24px rgba(0, 0, 0, 0.45), -10px -10px 24px rgba(255, 255, 255, 0.035);
+  --shadow-raised-sm: 5px 5px 12px rgba(0, 0, 0, 0.4), -5px -5px 12px rgba(255, 255, 255, 0.03);
+  --shadow-pop: 0 12px 28px rgba(0, 0, 0, 0.45);
+  --shadow-pop-peach: 0 12px 28px rgba(0, 0, 0, 0.45);
+  --shadow-inset: inset 5px 5px 12px rgba(0, 0, 0, 0.45), inset -5px -5px 12px rgba(255, 255, 255, 0.035);
+  --shadow-inset-sm: inset 3px 3px 7px rgba(0, 0, 0, 0.4), inset -3px -3px 7px rgba(255, 255, 255, 0.03);
+}
+
+/* ============================== Base ============================== */
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: var(--c-bg);
+    color: var(--c-text);
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: rgba(138, 206, 209, 0.45);
+  }
+
+  /* Accessible focus — neumorphism must never hide it (PRD §74) */
+  :focus-visible {
+    outline: 2px solid var(--c-teal);
+    outline-offset: 2px;
+    border-radius: 10px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(127, 141, 148, 0.35);
+    border-radius: 999px;
+    border: 3px solid var(--c-bg);
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    opacity: 0.55;
+    cursor: pointer;
+  }
+}
+
+/* ========================= Components ============================= */
+
+@layer components {
+  /* Raised floating surface */
+  .neu-card {
+    background: var(--c-surface);
+    border-radius: 26px;
+    border: 1px solid var(--c-border);
+    box-shadow: var(--shadow-raised);
+  }
+
+  .neu-card-sm {
+    background: var(--c-surface);
+    border-radius: 20px;
+    border: 1px solid var(--c-border);
+    box-shadow: var(--shadow-raised-sm);
+  }
+
+  /* Recessed well — chart containers, inputs, track areas (PRD §5, §23) */
+  .neu-inset {
+    background: var(--c-bg);
+    border-radius: 20px;
+    box-shadow: var(--shadow-inset);
+  }
+
+  .neu-inset-sm {
+    background: var(--c-bg);
+    border-radius: 14px;
+    box-shadow: var(--shadow-inset-sm);
+  }
+
+  /* Tactile raised button — presses inward on :active (PRD §13) */
+  .neu-btn {
+    background: var(--c-surface);
+    border-radius: 16px;
+    border: 1px solid var(--c-border);
+    box-shadow: var(--shadow-raised-sm);
+    color: var(--c-text);
+    font-weight: 600;
+    transition: box-shadow 0.16s ease, transform 0.16s ease, color 0.16s ease, background 0.16s ease;
+    cursor: pointer;
+    user-select: none;
+  }
+  .neu-btn:hover:not(:disabled) {
+    color: var(--c-teal-deep);
+  }
+  .neu-btn:active:not(:disabled) {
+    box-shadow: var(--shadow-inset-sm);
+    transform: translateY(1px);
+  }
+  .neu-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .neu-btn-primary {
+    background: linear-gradient(145deg, #62c9ce, #4fb8bd);
+    color: #ffffff;
+    border: none;
+    box-shadow: var(--shadow-pop);
+  }
+  .neu-btn-primary:hover:not(:disabled) {
+    color: #ffffff;
+    filter: brightness(1.04);
+  }
+
+  .neu-btn-peach {
+    background: linear-gradient(145deg, #f6bb88, #ee9d57);
+    color: #ffffff;
+    border: none;
+    box-shadow: var(--shadow-pop-peach);
+  }
+  .neu-btn-peach:hover:not(:disabled) {
+    color: #ffffff;
+    filter: brightness(1.04);
+  }
+
+  .neu-btn-danger {
+    color: var(--c-danger);
+  }
+
+  /* Floating pill (sync badge, toasts, tags) */
+  .neu-pill {
+    background: var(--c-surface);
+    border-radius: 999px;
+    border: 1px solid var(--c-border);
+    box-shadow: var(--shadow-raised-sm);
+    padding: 8px 16px;
+  }
+
+  /* Form fields — recessed inputs (PRD §56) */
+  .neu-input {
+    width: 100%;
+    background: var(--c-bg);
+    border-radius: 14px;
+    box-shadow: var(--shadow-inset-sm);
+    padding: 12px 16px;
+    color: var(--c-text);
+    border: 1px solid transparent;
+    transition: border-color 0.15s ease;
+  }
+  .neu-input::placeholder {
+    color: var(--c-text-faint);
+  }
+  .neu-input:focus {
+    outline: none;
+    border-color: rgba(87, 191, 196, 0.55);
+  }
+  .neu-input[aria-invalid="true"] {
+    border-color: rgba(217, 106, 92, 0.6);
+  }
+
+  /* Selectable chip */
+  .neu-chip {
+    background: var(--c-surface);
+    border-radius: 999px;
+    border: 1px solid var(--c-border);
+    box-shadow: var(--shadow-raised-sm);
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--c-text-sub);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+  .neu-chip:hover {
+    color: var(--c-teal-deep);
+  }
+  .neu-chip[data-active="true"] {
+    box-shadow: var(--shadow-inset-sm);
+    color: var(--c-teal-deep);
+    background: var(--c-bg);
+  }
+
+  /* Sidebar nav item — sunken active state (PRD §12) */
+  .neu-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 11px 14px;
+    border-radius: 16px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--c-text-sub);
+    transition: all 0.16s ease;
+    position: relative;
+  }
+  .neu-nav-item:hover {
+    color: var(--c-text);
+    background: rgba(138, 206, 209, 0.10);
+  }
+  .neu-nav-item[data-active="true"] {
+    background: var(--c-bg);
+    box-shadow: var(--shadow-inset-sm);
+    color: var(--c-teal-deep);
+    font-weight: 600;
+  }
+
+  /* Segmented control (period toggles, tabs) */
+  .neu-segment {
+    background: var(--c-bg);
+    border-radius: 14px;
+    box-shadow: var(--shadow-inset-sm);
+    padding: 4px;
+    display: inline-flex;
+    gap: 4px;
+  }
+  .neu-segment-item {
+    border-radius: 11px;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--c-text-sub);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    transition: all 0.16s ease;
+  }
+  .neu-segment-item[data-active="true"] {
+    background: var(--c-surface);
+    box-shadow: var(--shadow-raised-sm);
+    color: var(--c-teal-deep);
+  }
+
+  .neu-divider {
+    height: 1px;
+    background: var(--c-border);
+  }
+
+  /* Large display numbers dominate (PRD §9) */
+  .display-number {
+    font-family: var(--font-display), sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+  }
+
+  .metric-up {
+    color: var(--c-teal-deep);
+  }
+  .metric-down {
+    color: var(--c-orange);
+  }
+}
+
+/* ====================== Recharts theming ========================== */
+
+.recharts-text {
+  fill: var(--c-text-faint);
+  font-size: 11px;
+}
+.recharts-cartesian-axis-line,
+.recharts-cartesian-axis-tick-line {
+  stroke: transparent;
+}
+.recharts-tooltip-wrapper {
+  outline: none;
+}
+.neu-chart-tooltip {
+  background: var(--c-surface);
+  border-radius: 14px;
+  border: 1px solid var(--c-border);
+  box-shadow: var(--shadow-raised-sm);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--c-text);
+}
+.neu-chart-tooltip .label {
+  color: var(--c-text-sub);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+/* ========================= Motion safety ========================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
