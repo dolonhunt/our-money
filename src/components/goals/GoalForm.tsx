@@ -90,7 +90,7 @@ export function GoalForm({ open, onClose, editing, onSaved }: { open: boolean; o
         <Field label="Description (optional)" htmlFor="gl-desc">
           <NeuTextarea id="gl-desc" placeholder="Bali in December — flights + hotel" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={240} />
         </Field>
-        {targetAmount && <p className="text-[12.5px] text-sub">You'll save up to {money(parseFloat(targetAmount) || 0)}.</p>}
+        {targetAmount && <p className="text-[12.5px] text-sub">You&apos;ll save up to {money(parseFloat(targetAmount) || 0)}.</p>}
         {error && <p className="text-[13px] font-medium text-danger" role="alert">{error}</p>}
         <NeuButton type="submit" variant="primary" size="lg" loading={busy} className="w-full">
           {editing ? "Save changes" : "Create goal"}

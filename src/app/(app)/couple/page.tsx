@@ -56,7 +56,7 @@ export default function CouplePage() {
     if (!name.trim()) return toast.error("The space needs a name.");
     setBusy(true);
     try {
-      await updateHouseholdSettings(householdId, { name: name.trim(), currency });
+      await updateHouseholdSettings(householdId as string, { name: name.trim(), currency });
       toast.success("Household updated");
     } catch {
       toast.error("Couldn't save. Try again.");
@@ -69,7 +69,7 @@ export default function CouplePage() {
     if (!profile) return;
     setBusy(true);
     try {
-      const result = await leaveHousehold(profile, household, members.length);
+      const result = await leaveHousehold(profile, household!, members.length);
       toast.success(result === "dissolved" ? "Money space dissolved" : "You left the money space");
       setConfirmLeave(false);
       router.replace("/onboarding");
@@ -83,7 +83,7 @@ export default function CouplePage() {
   async function doRemove(uid: string) {
     setBusy(true);
     try {
-      await removeMember(householdId, uid);
+      await removeMember(householdId as string, uid);
       toast.success("Member removed");
       setConfirmRemove(null);
     } catch {
@@ -96,7 +96,7 @@ export default function CouplePage() {
   async function doTransfer(uid: string) {
     setBusy(true);
     try {
-      await transferOwnership(householdId, uid);
+      await transferOwnership(householdId as string, uid);
       toast.success("Ownership transferred");
       setConfirmTransfer(null);
     } catch {

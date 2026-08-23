@@ -33,13 +33,13 @@ export function ContributeModal({ open, onClose, goal, onSaved }: { open: boolea
     if (!householdId || !profile) return;
     setBusy(true);
     try {
-      await contributeToGoal(householdId, goal.id, profile.uid, memberUids, {
+      await contributeToGoal(householdId, goal!.id, profile.uid, memberUids, {
         amount: amt,
         date,
         note,
         actorName: profile.displayName,
       });
-      toast.success(`${money(amt)} added to ${goal.name}`);
+      toast.success(`${money(amt)} added to ${goal!.name}`);
       setAmount("");
       setNote("");
       onSaved?.();
@@ -54,7 +54,7 @@ export function ContributeModal({ open, onClose, goal, onSaved }: { open: boolea
   const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
 
   return (
-    <Modal open={open} onClose={onClose} title={`Contribute — ${goal.name}`}>
+    <Modal open={open} onClose={onClose} title={`Contribute — ${goal!.name}`}>
       <form className="flex flex-col gap-4" onSubmit={submit}>
         <div className="neu-inset flex items-baseline justify-between px-4 py-3">
           <span className="text-[12px] font-semibold text-sub">Still needed</span>

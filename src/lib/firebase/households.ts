@@ -81,17 +81,20 @@ export async function joinHousehold(
     throw new Error("That invite code doesn't match this money space.");
   }
 
-  const membersSnap = await getDocs(collection(db, "households", householdId, "members"));
+  const membersSnap = await getDocs(collection(db, "households",
+          householdId, "members"));
   const existing = membersSnap.docs.map((d) => d.data() as HouseholdMember);
   if (existing.some((m) => m.uid === user.uid)) {
     // already a member — just re-link the profile
-    await setUserHousehold(user.uid, householdId, existing.find((m) => m.uid === user.uid)!.role);
+    await setUserHousehold(user.uid,
+          householdId, existing.find((m) => m.uid === user.uid)!.role);
     return;
   }
   if (existing.length >= MAX_MEMBERS) throw new Error("This money space already has two partners.");
 
   // joinedViaCode is validated against household.inviteCode by security rules
-  await setDoc(doc(db, "households", householdId, "members", user.uid), {
+  await setDoc(doc(db, "households",
+          householdId, "members", user.uid), {
     uid: user.uid,
     role: "member",
     displayName: user.displayName,
@@ -100,26 +103,33 @@ export async function joinHousehold(
     joinedViaCode: code.trim().toUpperCase(),
     joinedAt: serverTimestamp(),
   });
-  await setUserHousehold(user.uid, householdId, "member");
+  await setUserHousehold(user.uid,
+          householdId, "member");
   await updateDoc(doc(db, "households", householdId), { updatedAt: serverTimestamp() });
 
-  await logActivity(householdId, {
+  await logActivity(
+          householdId, {
     actorId: user.uid,
     action: "member.joined",
     entityType: "household",
-    entityId: householdId,
+    entityId:
+          householdId,
     description: `${user.displayName} joined the money space 🎉`,
   });
   for (const m of existing) {
-    notifyQuietly(householdId, {
+    notifyQuietly(
+          householdId, {
       uid: m.uid,
+
+          householdId,
       actorId: user.uid,
       read: false,
       type: "household",
       title: "Your partner joined",
       body: `${user.displayName} is now connected to ${household.name}.`,
       entityType: "household",
-      entityId: householdId,
+      entityId:
+          householdId,
     });
   }
 }
@@ -164,7 +174,8 @@ export function subscribeMembers(
   cb: (members: HouseholdMember[]) => void,
   onError?: (e: Error) => void
 ): () => void {
-  const q = query(collection(getDb(), "households", householdId, "members"), orderBy("joinedAt", "asc"), limit(MAX_MEMBERS));
+  const q = query(collection(getDb(), "households",
+          householdId, "members"), orderBy("joinedAt", "asc"), limit(MAX_MEMBERS));
   return onSnapshot(
     q,
     (snap) => cb(snap.docs.map((d) => ({ ...(d.data() as Omit<HouseholdMember, "id">) }))),
@@ -237,8 +248,10 @@ export async function transferOwnership(householdId: string, newOwnerUid: string
   const db = getDb();
   const batch = writeBatch(db);
   batch.update(doc(db, "households", householdId), { ownerUid: newOwnerUid, updatedAt: serverTimestamp() });
-  batch.set(doc(db, "households", householdId, "members", newOwnerUid), { role: "owner" }, { merge: true });
-  const membersSnap = await getDocs(collection(db, "households", householdId, "members"));
+  batch.set(doc(db, "households",
+          householdId, "members", newOwnerUid), { role: "owner" }, { merge: true });
+  const membersSnap = await getDocs(collection(db, "households",
+          householdId, "members"));
   for (const m of membersSnap.docs) {
     if (m.id !== newOwnerUid) batch.update(m.ref, { role: "member" });
   }
@@ -252,13 +265,16 @@ export async function transferOwnership(householdId: string, newOwnerUid: string
  */
 export async function removeMember(householdId: string, memberUid: string): Promise<void> {
   const db = getDb();
-  await logActivity(householdId, {
+  await logActivity(
+          householdId, {
     actorId: memberUid,
     action: "member.removed",
     entityType: "household",
-    entityId: householdId,
+    entityId:
+          householdId,
     description: "A member was removed from the money space",
   });
-  await deleteDoc(doc(db, "households", householdId, "members", memberUid));
+  await deleteDoc(doc(db, "households",
+          householdId, "members", memberUid));
   await updateDoc(doc(db, "households", householdId), { updatedAt: serverTimestamp() });
 }

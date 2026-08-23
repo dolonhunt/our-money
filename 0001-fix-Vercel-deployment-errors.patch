@@ -1,0 +1,553 @@
+From bece242d823da05cef7fa66d39b2dc4614049158 Mon Sep 17 00:00:00 2001
+From: "google-labs-jules[bot]"
+ <161369871+google-labs-jules[bot]@users.noreply.github.com>
+Date: Sun, 23 Aug 2026 18:27:34 +0000
+Subject: [PATCH] fix: Vercel deployment errors
+
+---
+ src/app/(app)/accounts/page.tsx          |  2 +-
+ src/app/(app)/couple/page.tsx            |  8 ++---
+ src/app/(app)/notifications/page.tsx     |  2 +-
+ src/app/(auth)/forgot-password/page.tsx  |  2 +-
+ src/app/onboarding/page.tsx              |  4 +--
+ src/components/goals/ContributeModal.tsx |  6 ++--
+ src/components/goals/GoalForm.tsx        |  2 +-
+ src/lib/firebase/bills.ts                | 44 ++++++++++++++++--------
+ src/lib/firebase/budgets.ts              | 25 ++++++++++----
+ src/lib/firebase/households.ts           | 44 ++++++++++++++++--------
+ src/lib/firebase/notifications.ts        | 23 +++++++++----
+ tsconfig.json                            |  1 +
+ 12 files changed, 108 insertions(+), 55 deletions(-)
+
+diff --git a/src/app/(app)/accounts/page.tsx b/src/app/(app)/accounts/page.tsx
+index 549341a..486673a 100644
+--- a/src/app/(app)/accounts/page.tsx
++++ b/src/app/(app)/accounts/page.tsx
+@@ -12,7 +12,7 @@ import { EmptyState, PageLoader } from "@/components/ui/feedback";
+ import { FadeUp, NeuButton, SectionHead } from "@/components/ui/primitives";
+ import { AccountForm, ACCOUNT_TYPES } from "@/components/accounts/AccountForm";
+
+-const TYPE_ICON: Record<AccountType, React.ComponentType<{ size?: number; className?: string }>> = {
++const TYPE_ICON: Record<AccountType, React.ComponentType<{ size?: number | string; className?: string }>> = {
+   cash: Banknote,
+   bank: Landmark,
+   mobile: Smartphone,
+diff --git a/src/app/(app)/couple/page.tsx b/src/app/(app)/couple/page.tsx
+index e53ab8e..18eb426 100644
+--- a/src/app/(app)/couple/page.tsx
++++ b/src/app/(app)/couple/page.tsx
+@@ -56,7 +56,7 @@ export default function CouplePage() {
+     if (!name.trim()) return toast.error("The space needs a name.");
+     setBusy(true);
+     try {
+-      await updateHouseholdSettings(householdId, { name: name.trim(), currency });
++      await updateHouseholdSettings(householdId as string, { name: name.trim(), currency });
+       toast.success("Household updated");
+     } catch {
+       toast.error("Couldn't save. Try again.");
+@@ -69,7 +69,7 @@ export default function CouplePage() {
+     if (!profile) return;
+     setBusy(true);
+     try {
+-      const result = await leaveHousehold(profile, household, members.length);
++      const result = await leaveHousehold(profile, household!, members.length);
+       toast.success(result === "dissolved" ? "Money space dissolved" : "You left the money space");
+       setConfirmLeave(false);
+       router.replace("/onboarding");
+@@ -83,7 +83,7 @@ export default function CouplePage() {
+   async function doRemove(uid: string) {
+     setBusy(true);
+     try {
+-      await removeMember(householdId, uid);
++      await removeMember(householdId as string, uid);
+       toast.success("Member removed");
+       setConfirmRemove(null);
+     } catch {
+@@ -96,7 +96,7 @@ export default function CouplePage() {
+   async function doTransfer(uid: string) {
+     setBusy(true);
+     try {
+-      await transferOwnership(householdId, uid);
++      await transferOwnership(householdId as string, uid);
+       toast.success("Ownership transferred");
+       setConfirmTransfer(null);
+     } catch {
+diff --git a/src/app/(app)/notifications/page.tsx b/src/app/(app)/notifications/page.tsx
+index 069d251..706a720 100644
+--- a/src/app/(app)/notifications/page.tsx
++++ b/src/app/(app)/notifications/page.tsx
+@@ -14,7 +14,7 @@ import { Avatar } from "@/components/ui/primitives";
+
+ type Filter = "all" | "unread" | NotificationType;
+
+-const TYPE_ICON: Record<NotificationType, React.ComponentType<{ size?: number; className?: string }>> = {
++const TYPE_ICON: Record<NotificationType, React.ComponentType<{ size?: number | string; className?: string }>> = {
+   partner: Users,
+   budget: Wallet,
+   bill: Receipt,
+diff --git a/src/app/(auth)/forgot-password/page.tsx b/src/app/(auth)/forgot-password/page.tsx
+index d1b1b15..25e7bf9 100644
+--- a/src/app/(auth)/forgot-password/page.tsx
++++ b/src/app/(auth)/forgot-password/page.tsx
+@@ -41,7 +41,7 @@ export default function ForgotPasswordPage() {
+         </div>
+       ) : (
+         <>
+-          <p className="text-sm leading-relaxed text-sub">We'll email you a secure link to set a new password.</p>
++          <p className="text-sm leading-relaxed text-sub">We&apos;ll email you a secure link to set a new password.</p>
+           <Field label="Email" htmlFor="fp-email">
+             <NeuInput id="fp-email" type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+           </Field>
+diff --git a/src/app/onboarding/page.tsx b/src/app/onboarding/page.tsx
+index f50f8a2..82dc033 100644
+--- a/src/app/onboarding/page.tsx
++++ b/src/app/onboarding/page.tsx
+@@ -201,7 +201,7 @@ export default function OnboardingPage() {
+                   </span>
+                   <div>
+                     <p className="text-sm font-semibold text-ink">Create a new space</p>
+-                    <p className="text-[12.5px] text-sub">You'll be the owner and can invite your partner.</p>
++                    <p className="text-[12.5px] text-sub">You&apos;ll be the owner and can invite your partner.</p>
+                   </div>
+                 </div>
+                 <Field label="Space name" htmlFor="ob-hh">
+@@ -265,7 +265,7 @@ export default function OnboardingPage() {
+               </a>
+
+               <NeuButton variant="primary" size="lg" onClick={() => router.replace("/dashboard")} className="w-full">
+-                Go to dashboard — I'll invite later
++                Go to dashboard — I&apos;ll invite later
+               </NeuButton>
+               <button onClick={logout} className="mx-auto flex items-center gap-1.5 text-[12.5px] font-semibold text-sub hover:text-ink">
+                 <LogOut size={13} aria-hidden /> Sign out
+diff --git a/src/components/goals/ContributeModal.tsx b/src/components/goals/ContributeModal.tsx
+index ccb2743..3f202d2 100644
+--- a/src/components/goals/ContributeModal.tsx
++++ b/src/components/goals/ContributeModal.tsx
+@@ -33,13 +33,13 @@ export function ContributeModal({ open, onClose, goal, onSaved }: { open: boolea
+     if (!householdId || !profile) return;
+     setBusy(true);
+     try {
+-      await contributeToGoal(householdId, goal.id, profile.uid, memberUids, {
++      await contributeToGoal(householdId, goal!.id, profile.uid, memberUids, {
+         amount: amt,
+         date,
+         note,
+         actorName: profile.displayName,
+       });
+-      toast.success(`${money(amt)} added to ${goal.name}`);
++      toast.success(`${money(amt)} added to ${goal!.name}`);
+       setAmount("");
+       setNote("");
+       onSaved?.();
+@@ -54,7 +54,7 @@ export function ContributeModal({ open, onClose, goal, onSaved }: { open: boolea
+   const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
+
+   return (
+-    <Modal open={open} onClose={onClose} title={`Contribute — ${goal.name}`}>
++    <Modal open={open} onClose={onClose} title={`Contribute — ${goal!.name}`}>
+       <form className="flex flex-col gap-4" onSubmit={submit}>
+         <div className="neu-inset flex items-baseline justify-between px-4 py-3">
+           <span className="text-[12px] font-semibold text-sub">Still needed</span>
+diff --git a/src/components/goals/GoalForm.tsx b/src/components/goals/GoalForm.tsx
+index 50c479f..2d2693c 100644
+--- a/src/components/goals/GoalForm.tsx
++++ b/src/components/goals/GoalForm.tsx
+@@ -90,7 +90,7 @@ export function GoalForm({ open, onClose, editing, onSaved }: { open: boolean; o
+         <Field label="Description (optional)" htmlFor="gl-desc">
+           <NeuTextarea id="gl-desc" placeholder="Bali in December — flights + hotel" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={240} />
+         </Field>
+-        {targetAmount && <p className="text-[12.5px] text-sub">You'll save up to {money(parseFloat(targetAmount) || 0)}.</p>}
++        {targetAmount && <p className="text-[12.5px] text-sub">You&apos;ll save up to {money(parseFloat(targetAmount) || 0)}.</p>}
+         {error && <p className="text-[13px] font-medium text-danger" role="alert">{error}</p>}
+         <NeuButton type="submit" variant="primary" size="lg" loading={busy} className="w-full">
+           {editing ? "Save changes" : "Create goal"}
+diff --git a/src/lib/firebase/bills.ts b/src/lib/firebase/bills.ts
+index c9600e9..d68e71a 100644
+--- a/src/lib/firebase/bills.ts
++++ b/src/lib/firebase/bills.ts
+@@ -12,7 +12,8 @@ export function subscribeBills(
+   cb: (items: Bill[]) => void,
+   onError?: (e: Error) => void
+ ): () => void {
+-  const q = query(collection(getDb(), "households", householdId, "bills"), orderBy("dueDate", "asc"));
++  const q = query(collection(getDb(), "households",
++          householdId, "bills"), orderBy("dueDate", "asc"));
+   return onSnapshot(
+     q,
+     (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Bill, "id">) }))),
+@@ -34,7 +35,8 @@ export interface BillInput {
+ export async function saveBill(householdId: string, actorUid: string, input: BillInput, existingId?: string): Promise<string> {
+   const db = getDb();
+   const payload = {
+-    householdId,
++
++          householdId,
+     name: input.name.trim(),
+     amount: Math.round(input.amount * 100) / 100,
+     dueDate: input.dueDate,
+@@ -52,19 +54,23 @@ export async function saveBill(householdId: string, actorUid: string, input: Bil
+   };
+   if (existingId) {
+     const { paid, paidAt, paidTransactionId, createdBy, createdAt, ...patch } = payload;
+-    await updateDoc(doc(db, "households", householdId, "bills", existingId), patch);
++    await updateDoc(doc(db, "households",
++          householdId, "bills", existingId), patch);
+     return existingId;
+   }
+-  const ref = await addDoc(collection(db, "households", householdId, "bills"), payload);
++  const ref = await addDoc(collection(db, "households",
++          householdId, "bills"), payload);
+   return ref.id;
+ }
+
+ export async function deleteBill(householdId: string, billId: string): Promise<void> {
+-  await deleteDoc(doc(getDb(), "households", householdId, "bills", billId));
++  await deleteDoc(doc(getDb(), "households",
++          householdId, "bills", billId));
+ }
+
+ export async function markBillUnpaid(householdId: string, billId: string): Promise<void> {
+-  await updateDoc(doc(getDb(), "households", householdId, "bills", billId), {
++  await updateDoc(doc(getDb(), "households",
++          householdId, "bills", billId), {
+     paid: false,
+     paidAt: null,
+     paidTransactionId: null,
+@@ -87,9 +93,11 @@ export async function payBill(
+   const today = todayISO();
+   const batch = writeBatch(db);
+
+-  const txRef = doc(collection(db, "households", householdId, "transactions"));
++  const txRef = doc(collection(db, "households",
++          householdId, "transactions"));
+   batch.set(txRef, {
+-    householdId,
++
++          householdId,
+     type: "expense",
+     amount: bill.amount,
+     currency: "BDT",
+@@ -115,7 +123,8 @@ export async function payBill(
+     deletedAt: null,
+   });
+
+-  batch.update(doc(db, "households", householdId, "bills", bill.id), {
++  batch.update(doc(db, "households",
++          householdId, "bills", bill.id), {
+     paid: true,
+     paidAt: serverTimestamp(),
+     paidTransactionId: txRef.id,
+@@ -123,9 +132,11 @@ export async function payBill(
+   });
+
+   if (bill.recurring !== "none") {
+-    const nextRef = doc(collection(db, "households", householdId, "bills"));
++    const nextRef = doc(collection(db, "households",
++          householdId, "bills"));
+     batch.set(nextRef, {
+-      householdId,
++
++          householdId,
+       name: bill.name,
+       amount: bill.amount,
+       dueDate: advanceRecurrence(bill.dueDate, bill.recurring as "daily" | "weekly" | "monthly" | "yearly"),
+@@ -144,7 +155,8 @@ export async function payBill(
+   }
+
+   await batch.commit();
+-  await logActivity(householdId, {
++  await logActivity(
++          householdId, {
+     actorId: actorUid,
+     action: "bill.paid",
+     entityType: "bill",
+@@ -152,7 +164,8 @@ export async function payBill(
+     description: `paid ${bill.name} — ${money(bill.amount)}`,
+     metadata: { billName: bill.name },
+   });
+-  notifyPartners(householdId, memberUids, actorUid, {
++  notifyPartners(
++          householdId, memberUids, actorUid, {
+     type: "partner",
+     title: "Bill paid",
+     body: `${bill.name} — ${money(bill.amount)}`,
+@@ -179,8 +192,11 @@ export async function checkBillReminders(householdId: string, bills: Bill[], mem
+     const status = billStatus(bill);
+     if (status === "due-soon" || status === "overdue") {
+       for (const uid of memberUids) {
+-        await createNotification(householdId, {
++        await createNotification(
++          householdId, {
+           uid,
++
++          householdId,
+           actorId: null,
+           read: false,
+           type: "bill",
+diff --git a/src/lib/firebase/budgets.ts b/src/lib/firebase/budgets.ts
+index 7e70ef9..ef7bf37 100644
+--- a/src/lib/firebase/budgets.ts
++++ b/src/lib/firebase/budgets.ts
+@@ -12,7 +12,8 @@ export function subscribeBudgets(
+   onError?: (e: Error) => void
+ ): () => void {
+   const q = query(
+-    collection(getDb(), "households", householdId, "budgets"),
++    collection(getDb(), "households",
++          householdId, "budgets"),
+     where("month", "==", month),
+     orderBy("createdAt", "asc")
+   );
+@@ -34,7 +35,8 @@ export interface BudgetInput {
+ export async function saveBudget(householdId: string, actorUid: string, input: BudgetInput, existingId?: string): Promise<string> {
+   const db = getDb();
+   const payload = {
+-    householdId,
++
++          householdId,
+     categoryId: input.categoryId,
+     month: input.month,
+     amount: Math.round(input.amount * 100) / 100,
+@@ -46,15 +48,18 @@ export async function saveBudget(householdId: string, actorUid: string, input: B
+   };
+   if (existingId) {
+     const { createdBy, createdAt, ...patch } = payload;
+-    await updateDoc(doc(db, "households", householdId, "budgets", existingId), { ...patch, updatedAt: serverTimestamp() });
++    await updateDoc(doc(db, "households",
++          householdId, "budgets", existingId), { ...patch, updatedAt: serverTimestamp() });
+     return existingId;
+   }
+-  const ref = await addDoc(collection(db, "households", householdId, "budgets"), payload);
++  const ref = await addDoc(collection(db, "households",
++          householdId, "budgets"), payload);
+   return ref.id;
+ }
+
+ export async function deleteBudget(householdId: string, budgetId: string): Promise<void> {
+-  await deleteDoc(doc(getDb(), "households", householdId, "budgets", budgetId));
++  await deleteDoc(doc(getDb(), "households",
++          householdId, "budgets", budgetId));
+ }
+
+ /**
+@@ -74,8 +79,11 @@ export async function checkBudgetAlerts(
+     const name = categoryNames[budget.categoryId] ?? "Budget";
+     if (ratio >= 1) {
+       for (const uid of memberUids) {
+-        await createNotification(householdId, {
++        await createNotification(
++          householdId, {
+           uid,
++
++          householdId,
+           actorId: null,
+           read: false,
+           type: "budget",
+@@ -88,8 +96,11 @@ export async function checkBudgetAlerts(
+       }
+     } else if (ratio >= 0.9) {
+       for (const uid of memberUids) {
+-        await createNotification(householdId, {
++        await createNotification(
++          householdId, {
+           uid,
++
++          householdId,
+           actorId: null,
+           read: false,
+           type: "budget",
+diff --git a/src/lib/firebase/households.ts b/src/lib/firebase/households.ts
+index 6715ccf..334e96f 100644
+--- a/src/lib/firebase/households.ts
++++ b/src/lib/firebase/households.ts
+@@ -81,17 +81,20 @@ export async function joinHousehold(
+     throw new Error("That invite code doesn't match this money space.");
+   }
+
+-  const membersSnap = await getDocs(collection(db, "households", householdId, "members"));
++  const membersSnap = await getDocs(collection(db, "households",
++          householdId, "members"));
+   const existing = membersSnap.docs.map((d) => d.data() as HouseholdMember);
+   if (existing.some((m) => m.uid === user.uid)) {
+     // already a member — just re-link the profile
+-    await setUserHousehold(user.uid, householdId, existing.find((m) => m.uid === user.uid)!.role);
++    await setUserHousehold(user.uid,
++          householdId, existing.find((m) => m.uid === user.uid)!.role);
+     return;
+   }
+   if (existing.length >= MAX_MEMBERS) throw new Error("This money space already has two partners.");
+
+   // joinedViaCode is validated against household.inviteCode by security rules
+-  await setDoc(doc(db, "households", householdId, "members", user.uid), {
++  await setDoc(doc(db, "households",
++          householdId, "members", user.uid), {
+     uid: user.uid,
+     role: "member",
+     displayName: user.displayName,
+@@ -100,26 +103,33 @@ export async function joinHousehold(
+     joinedViaCode: code.trim().toUpperCase(),
+     joinedAt: serverTimestamp(),
+   });
+-  await setUserHousehold(user.uid, householdId, "member");
++  await setUserHousehold(user.uid,
++          householdId, "member");
+   await updateDoc(doc(db, "households", householdId), { updatedAt: serverTimestamp() });
+
+-  await logActivity(householdId, {
++  await logActivity(
++          householdId, {
+     actorId: user.uid,
+     action: "member.joined",
+     entityType: "household",
+-    entityId: householdId,
++    entityId:
++          householdId,
+     description: `${user.displayName} joined the money space 🎉`,
+   });
+   for (const m of existing) {
+-    notifyQuietly(householdId, {
++    notifyQuietly(
++          householdId, {
+       uid: m.uid,
++
++          householdId,
+       actorId: user.uid,
+       read: false,
+       type: "household",
+       title: "Your partner joined",
+       body: `${user.displayName} is now connected to ${household.name}.`,
+       entityType: "household",
+-      entityId: householdId,
++      entityId:
++          householdId,
+     });
+   }
+ }
+@@ -164,7 +174,8 @@ export function subscribeMembers(
+   cb: (members: HouseholdMember[]) => void,
+   onError?: (e: Error) => void
+ ): () => void {
+-  const q = query(collection(getDb(), "households", householdId, "members"), orderBy("joinedAt", "asc"), limit(MAX_MEMBERS));
++  const q = query(collection(getDb(), "households",
++          householdId, "members"), orderBy("joinedAt", "asc"), limit(MAX_MEMBERS));
+   return onSnapshot(
+     q,
+     (snap) => cb(snap.docs.map((d) => ({ ...(d.data() as Omit<HouseholdMember, "id">) }))),
+@@ -237,8 +248,10 @@ export async function transferOwnership(householdId: string, newOwnerUid: string
+   const db = getDb();
+   const batch = writeBatch(db);
+   batch.update(doc(db, "households", householdId), { ownerUid: newOwnerUid, updatedAt: serverTimestamp() });
+-  batch.set(doc(db, "households", householdId, "members", newOwnerUid), { role: "owner" }, { merge: true });
+-  const membersSnap = await getDocs(collection(db, "households", householdId, "members"));
++  batch.set(doc(db, "households",
++          householdId, "members", newOwnerUid), { role: "owner" }, { merge: true });
++  const membersSnap = await getDocs(collection(db, "households",
++          householdId, "members"));
+   for (const m of membersSnap.docs) {
+     if (m.id !== newOwnerUid) batch.update(m.ref, { role: "member" });
+   }
+@@ -252,13 +265,16 @@ export async function transferOwnership(householdId: string, newOwnerUid: string
+  */
+ export async function removeMember(householdId: string, memberUid: string): Promise<void> {
+   const db = getDb();
+-  await logActivity(householdId, {
++  await logActivity(
++          householdId, {
+     actorId: memberUid,
+     action: "member.removed",
+     entityType: "household",
+-    entityId: householdId,
++    entityId:
++          householdId,
+     description: "A member was removed from the money space",
+   });
+-  await deleteDoc(doc(db, "households", householdId, "members", memberUid));
++  await deleteDoc(doc(db, "households",
++          householdId, "members", memberUid));
+   await updateDoc(doc(db, "households", householdId), { updatedAt: serverTimestamp() });
+ }
+diff --git a/src/lib/firebase/notifications.ts b/src/lib/firebase/notifications.ts
+index dec730e..3e2ab19 100644
+--- a/src/lib/firebase/notifications.ts
++++ b/src/lib/firebase/notifications.ts
+@@ -27,8 +27,10 @@ export async function createNotification(
+ ): Promise<void> {
+   const id = data.dedupeKey ? deterministicId(data.type, data.dedupeKey) : undefined;
+   const ref = id
+-    ? doc(getDb(), "households", householdId, "notifications", id)
+-    : doc(collection(getDb(), "households", householdId, "notifications"));
++    ? doc(getDb(), "households",
++          householdId, "notifications", id)
++    : doc(collection(getDb(), "households",
++          householdId, "notifications"));
+   if (id) {
+     const existing = await getDoc(ref);
+     if (existing.exists()) return; // already notified — never re-unread
+@@ -39,7 +41,8 @@ export async function createNotification(
+
+ /** Fire-and-forget variant for UI flows that shouldn't block on notification writes. */
+ export function notifyQuietly(householdId: string, data: Parameters<typeof createNotification>[1]): void {
+-  createNotification(householdId, data).catch(() => undefined);
++  createNotification(
++          householdId, data).catch(() => undefined);
+ }
+
+ /** Notify every household member EXCEPT the actor (partner activity, PRD §47). */
+@@ -58,8 +61,11 @@ export function notifyPartners(
+ ): void {
+   for (const uid of memberUids) {
+     if (uid === actorUid) continue;
+-    notifyQuietly(householdId, {
++    notifyQuietly(
++          householdId, {
+       uid,
++
++          householdId,
+       actorId: actorUid,
+       read: false,
+       title: payload.title,
+@@ -80,7 +86,8 @@ export function subscribeNotifications(
+   onError?: (e: Error) => void
+ ): () => void {
+   const q = query(
+-    collection(getDb(), "households", householdId, "notifications"),
++    collection(getDb(), "households",
++          householdId, "notifications"),
+     where("uid", "==", uid),
+     orderBy("createdAt", "desc"),
+     limit(60)
+@@ -93,7 +100,8 @@ export function subscribeNotifications(
+ }
+
+ export async function markNotificationRead(householdId: string, id: string): Promise<void> {
+-  await updateDoc(doc(getDb(), "households", householdId, "notifications", id), { read: true });
++  await updateDoc(doc(getDb(), "households",
++          householdId, "notifications", id), { read: true });
+ }
+
+ export async function markAllNotificationsRead(householdId: string, uid: string, ids: string[]): Promise<void> {
+@@ -101,7 +109,8 @@ export async function markAllNotificationsRead(householdId: string, uid: string,
+   const db = getDb();
+   const batch = writeBatch(db);
+   for (const id of ids) {
+-    batch.update(doc(db, "households", householdId, "notifications", id), { read: true });
++    batch.update(doc(db, "households",
++          householdId, "notifications", id), { read: true });
+   }
+   await batch.commit();
+ }
+diff --git a/tsconfig.json b/tsconfig.json
+index 49e4cf3..ab270dd 100644
+--- a/tsconfig.json
++++ b/tsconfig.json
+@@ -1,6 +1,7 @@
+ {
+   "compilerOptions": {
+     "lib": ["dom", "dom.iterable", "esnext"],
++    "downlevelIteration": true,
+     "allowJs": true,
+     "skipLibCheck": true,
+     "strict": true,
+--
+2.53.0

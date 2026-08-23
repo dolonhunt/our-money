@@ -41,7 +41,7 @@ export default function ForgotPasswordPage() {
         </div>
       ) : (
         <>
-          <p className="text-sm leading-relaxed text-sub">We'll email you a secure link to set a new password.</p>
+          <p className="text-sm leading-relaxed text-sub">We&apos;ll email you a secure link to set a new password.</p>
           <Field label="Email" htmlFor="fp-email">
             <NeuInput id="fp-email" type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
           </Field>

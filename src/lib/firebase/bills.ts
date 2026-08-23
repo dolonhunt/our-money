@@ -12,7 +12,8 @@ export function subscribeBills(
   cb: (items: Bill[]) => void,
   onError?: (e: Error) => void
 ): () => void {
-  const q = query(collection(getDb(), "households", householdId, "bills"), orderBy("dueDate", "asc"));
+  const q = query(collection(getDb(), "households",
+          householdId, "bills"), orderBy("dueDate", "asc"));
   return onSnapshot(
     q,
     (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Bill, "id">) }))),
@@ -34,7 +35,8 @@ export interface BillInput {
 export async function saveBill(householdId: string, actorUid: string, input: BillInput, existingId?: string): Promise<string> {
   const db = getDb();
   const payload = {
-    householdId,
+
+          householdId,
     name: input.name.trim(),
     amount: Math.round(input.amount * 100) / 100,
     dueDate: input.dueDate,
@@ -52,19 +54,23 @@ export async function saveBill(householdId: string, actorUid: string, input: Bil
   };
   if (existingId) {
     const { paid, paidAt, paidTransactionId, createdBy, createdAt, ...patch } = payload;
-    await updateDoc(doc(db, "households", householdId, "bills", existingId), patch);
+    await updateDoc(doc(db, "households",
+          householdId, "bills", existingId), patch);
     return existingId;
   }
-  const ref = await addDoc(collection(db, "households", householdId, "bills"), payload);
+  const ref = await addDoc(collection(db, "households",
+          householdId, "bills"), payload);
   return ref.id;
 }
 
 export async function deleteBill(householdId: string, billId: string): Promise<void> {
-  await deleteDoc(doc(getDb(), "households", householdId, "bills", billId));
+  await deleteDoc(doc(getDb(), "households",
+          householdId, "bills", billId));
 }
 
 export async function markBillUnpaid(householdId: string, billId: string): Promise<void> {
-  await updateDoc(doc(getDb(), "households", householdId, "bills", billId), {
+  await updateDoc(doc(getDb(), "households",
+          householdId, "bills", billId), {
     paid: false,
     paidAt: null,
     paidTransactionId: null,
@@ -87,9 +93,11 @@ export async function payBill(
   const today = todayISO();
   const batch = writeBatch(db);
 
-  const txRef = doc(collection(db, "households", householdId, "transactions"));
+  const txRef = doc(collection(db, "households",
+          householdId, "transactions"));
   batch.set(txRef, {
-    householdId,
+
+          householdId,
     type: "expense",
     amount: bill.amount,
     currency: "BDT",
@@ -115,7 +123,8 @@ export async function payBill(
     deletedAt: null,
   });
 
-  batch.update(doc(db, "households", householdId, "bills", bill.id), {
+  batch.update(doc(db, "households",
+          householdId, "bills", bill.id), {
     paid: true,
     paidAt: serverTimestamp(),
     paidTransactionId: txRef.id,
@@ -123,9 +132,11 @@ export async function payBill(
   });
 
   if (bill.recurring !== "none") {
-    const nextRef = doc(collection(db, "households", householdId, "bills"));
+    const nextRef = doc(collection(db, "households",
+          householdId, "bills"));
     batch.set(nextRef, {
-      householdId,
+
+          householdId,
       name: bill.name,
       amount: bill.amount,
       dueDate: advanceRecurrence(bill.dueDate, bill.recurring as "daily" | "weekly" | "monthly" | "yearly"),
@@ -144,7 +155,8 @@ export async function payBill(
   }
 
   await batch.commit();
-  await logActivity(householdId, {
+  await logActivity(
+          householdId, {
     actorId: actorUid,
     action: "bill.paid",
     entityType: "bill",
@@ -152,7 +164,8 @@ export async function payBill(
     description: `paid ${bill.name} — ${money(bill.amount)}`,
     metadata: { billName: bill.name },
   });
-  notifyPartners(householdId, memberUids, actorUid, {
+  notifyPartners(
+          householdId, memberUids, actorUid, {
     type: "partner",
     title: "Bill paid",
     body: `${bill.name} — ${money(bill.amount)}`,
@@ -179,8 +192,11 @@ export async function checkBillReminders(householdId: string, bills: Bill[], mem
     const status = billStatus(bill);
     if (status === "due-soon" || status === "overdue") {
       for (const uid of memberUids) {
-        await createNotification(householdId, {
+        await createNotification(
+          householdId, {
           uid,
+
+          householdId,
           actorId: null,
           read: false,
           type: "bill",

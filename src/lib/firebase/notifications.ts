@@ -27,8 +27,10 @@ export async function createNotification(
 ): Promise<void> {
   const id = data.dedupeKey ? deterministicId(data.type, data.dedupeKey) : undefined;
   const ref = id
-    ? doc(getDb(), "households", householdId, "notifications", id)
-    : doc(collection(getDb(), "households", householdId, "notifications"));
+    ? doc(getDb(), "households",
+          householdId, "notifications", id)
+    : doc(collection(getDb(), "households",
+          householdId, "notifications"));
   if (id) {
     const existing = await getDoc(ref);
     if (existing.exists()) return; // already notified — never re-unread
@@ -39,7 +41,8 @@ export async function createNotification(
 
 /** Fire-and-forget variant for UI flows that shouldn't block on notification writes. */
 export function notifyQuietly(householdId: string, data: Parameters<typeof createNotification>[1]): void {
-  createNotification(householdId, data).catch(() => undefined);
+  createNotification(
+          householdId, data).catch(() => undefined);
 }
 
 /** Notify every household member EXCEPT the actor (partner activity, PRD §47). */
@@ -58,8 +61,11 @@ export function notifyPartners(
 ): void {
   for (const uid of memberUids) {
     if (uid === actorUid) continue;
-    notifyQuietly(householdId, {
+    notifyQuietly(
+          householdId, {
       uid,
+
+          householdId,
       actorId: actorUid,
       read: false,
       title: payload.title,
@@ -80,7 +86,8 @@ export function subscribeNotifications(
   onError?: (e: Error) => void
 ): () => void {
   const q = query(
-    collection(getDb(), "households", householdId, "notifications"),
+    collection(getDb(), "households",
+          householdId, "notifications"),
     where("uid", "==", uid),
     orderBy("createdAt", "desc"),
     limit(60)
@@ -93,7 +100,8 @@ export function subscribeNotifications(
 }
 
 export async function markNotificationRead(householdId: string, id: string): Promise<void> {
-  await updateDoc(doc(getDb(), "households", householdId, "notifications", id), { read: true });
+  await updateDoc(doc(getDb(), "households",
+          householdId, "notifications", id), { read: true });
 }
 
 export async function markAllNotificationsRead(householdId: string, uid: string, ids: string[]): Promise<void> {
@@ -101,7 +109,8 @@ export async function markAllNotificationsRead(householdId: string, uid: string,
   const db = getDb();
   const batch = writeBatch(db);
   for (const id of ids) {
-    batch.update(doc(db, "households", householdId, "notifications", id), { read: true });
+    batch.update(doc(db, "households",
+          householdId, "notifications", id), { read: true });
   }
   await batch.commit();
 }

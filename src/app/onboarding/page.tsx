@@ -201,7 +201,7 @@ export default function OnboardingPage() {
                   </span>
                   <div>
                     <p className="text-sm font-semibold text-ink">Create a new space</p>
-                    <p className="text-[12.5px] text-sub">You'll be the owner and can invite your partner.</p>
+                    <p className="text-[12.5px] text-sub">You&apos;ll be the owner and can invite your partner.</p>
                   </div>
                 </div>
                 <Field label="Space name" htmlFor="ob-hh">
@@ -265,7 +265,7 @@ export default function OnboardingPage() {
               </a>
 
               <NeuButton variant="primary" size="lg" onClick={() => router.replace("/dashboard")} className="w-full">
-                Go to dashboard — I'll invite later
+                Go to dashboard — I&apos;ll invite later
               </NeuButton>
               <button onClick={logout} className="mx-auto flex items-center gap-1.5 text-[12.5px] font-semibold text-sub hover:text-ink">
                 <LogOut size={13} aria-hidden /> Sign out

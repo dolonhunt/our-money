@@ -12,7 +12,8 @@ export function subscribeBudgets(
   onError?: (e: Error) => void
 ): () => void {
   const q = query(
-    collection(getDb(), "households", householdId, "budgets"),
+    collection(getDb(), "households",
+          householdId, "budgets"),
     where("month", "==", month),
     orderBy("createdAt", "asc")
   );
@@ -34,7 +35,8 @@ export interface BudgetInput {
 export async function saveBudget(householdId: string, actorUid: string, input: BudgetInput, existingId?: string): Promise<string> {
   const db = getDb();
   const payload = {
-    householdId,
+
+          householdId,
     categoryId: input.categoryId,
     month: input.month,
     amount: Math.round(input.amount * 100) / 100,
@@ -46,15 +48,18 @@ export async function saveBudget(householdId: string, actorUid: string, input: B
   };
   if (existingId) {
     const { createdBy, createdAt, ...patch } = payload;
-    await updateDoc(doc(db, "households", householdId, "budgets", existingId), { ...patch, updatedAt: serverTimestamp() });
+    await updateDoc(doc(db, "households",
+          householdId, "budgets", existingId), { ...patch, updatedAt: serverTimestamp() });
     return existingId;
   }
-  const ref = await addDoc(collection(db, "households", householdId, "budgets"), payload);
+  const ref = await addDoc(collection(db, "households",
+          householdId, "budgets"), payload);
   return ref.id;
 }
 
 export async function deleteBudget(householdId: string, budgetId: string): Promise<void> {
-  await deleteDoc(doc(getDb(), "households", householdId, "budgets", budgetId));
+  await deleteDoc(doc(getDb(), "households",
+          householdId, "budgets", budgetId));
 }
 
 /**
@@ -74,8 +79,11 @@ export async function checkBudgetAlerts(
     const name = categoryNames[budget.categoryId] ?? "Budget";
     if (ratio >= 1) {
       for (const uid of memberUids) {
-        await createNotification(householdId, {
+        await createNotification(
+          householdId, {
           uid,
+
+          householdId,
           actorId: null,
           read: false,
           type: "budget",
@@ -88,8 +96,11 @@ export async function checkBudgetAlerts(
       }
     } else if (ratio >= 0.9) {
       for (const uid of memberUids) {
-        await createNotification(householdId, {
+        await createNotification(
+          householdId, {
           uid,
+
+          householdId,
           actorId: null,
           read: false,
           type: "budget",
