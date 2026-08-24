@@ -12,7 +12,7 @@ import { EmptyState, PageLoader } from "@/components/ui/feedback";
 import { FadeUp, NeuButton, SectionHead } from "@/components/ui/primitives";
 import { AccountForm, ACCOUNT_TYPES } from "@/components/accounts/AccountForm";
 
-const TYPE_ICON: Record<AccountType, React.ComponentType<{ size?: number | string; className?: string }>> = {
+const TYPE_ICON: Record<AccountType, any> = {
   cash: Banknote,
   bank: Landmark,
   mobile: Smartphone,
