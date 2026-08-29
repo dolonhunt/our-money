@@ -27,9 +27,9 @@ export const MAX_MEMBERS = 2;
 export async function createHousehold(user: UserProfile, name: string, currency: string): Promise<string> {
   const db = getDb();
   const householdRef = doc(collection(db, "households"));
-  const batch = writeBatch(db);
+  const batch1 = writeBatch(db);
 
-  batch.set(householdRef, {
+  batch1.set(householdRef, {
     name,
     currency,
     inviteCode: randomCode(6),
@@ -38,7 +38,7 @@ export async function createHousehold(user: UserProfile, name: string, currency:
     updatedAt: serverTimestamp(),
   });
 
-  batch.set(doc(householdRef, "members", user.uid), {
+  batch1.set(doc(householdRef, "members", user.uid), {
     uid: user.uid,
     role: "owner",
     displayName: user.displayName,
@@ -47,15 +47,19 @@ export async function createHousehold(user: UserProfile, name: string, currency:
     joinedAt: serverTimestamp(),
   });
 
+  await batch1.commit();
+
+  // Seed default categories after owner member document is committed
+  const batch2 = writeBatch(db);
   for (const cat of DEFAULT_CATEGORIES) {
-    batch.set(doc(householdRef, "categories", cat.id), {
+    batch2.set(doc(householdRef, "categories", cat.id), {
       ...cat,
       createdBy: user.uid,
       createdAt: serverTimestamp(),
     });
   }
+  await batch2.commit().catch(() => undefined);
 
-  await batch.commit();
   await setUserHousehold(user.uid, householdRef.id, "owner");
   logActivity(householdRef.id, {
     actorId: user.uid,
