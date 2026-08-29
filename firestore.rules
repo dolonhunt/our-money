@@ -1,0 +1,132 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isHouseholdMember(hId) {
+      return signedIn() && exists(/databases/$(database)/documents/households/$(hId)/members/$(request.auth.uid));
+    }
+
+    function isHouseholdOwner(hId) {
+      return isHouseholdMember(hId)
+        && get(/databases/$(database)/documents/households/$(hId)).data.ownerUid == request.auth.uid;
+    }
+
+    /* ------------------------------ users ------------------------------ */
+    match /users/{uid} {
+      // basic profile info is readable by any signed-in user (partner lookup);
+      // emails are already shared inside a household.
+      allow read: if signedIn();
+      allow create, update: if isSelf(uid);
+      allow delete: if false; // profiles are never hard-deleted (v1)
+    }
+
+    /* --------------------------- households ---------------------------- */
+    match /households/{hId} {
+
+      // get: any signed-in user — required to verify invite codes before
+      // joining. IDs are unguessable (20-char random), so this exposes only
+      // name + inviteCode to someone who already holds a link (PRD §62).
+      // list: restricted to members.
+      allow get: if signedIn();
+      allow list: if isHouseholdMember(hId);
+
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid;
+
+      // members may bump updatedAt; settings changes are owner-only
+      allow update: if isHouseholdOwner(hId)
+        || (isHouseholdMember(hId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt']));
+
+      allow delete: if isHouseholdOwner(hId);
+
+      /* ------------------------- members/{uid} ------------------------- */
+      match /members/{uid} {
+        // joining requires: yourself, role "member", and the correct invite
+        // code stored on the member doc (checked against the household doc)
+        function joinCodeMatches() {
+          return request.resource.data.joinedViaCode
+            == get(/databases/$(database)/documents/households/$(hId)).data.inviteCode;
+        }
+
+        allow read: if isHouseholdMember(hId) || isSelf(uid);
+        // path 1: the household owner creates their own owner doc (batch create);
+        // path 2: a partner joins with the invite code as role "member"
+        allow create: if (isSelf(uid)
+            && request.resource.data.role == 'owner'
+            && get(/databases/$(database)/documents/households/$(hId)).data.ownerUid == request.auth.uid)
+          || (isSelf(uid)
+              && request.resource.data.role == 'member'
+              && joinCodeMatches());
+        allow update: if isHouseholdOwner(hId)
+          || (isSelf(uid)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL']));
+        allow delete: if isSelf(uid) || isHouseholdOwner(hId);
+      }
+
+      /* ------------------------ shared finance data -------------------- */
+      match /transactions/{id} {
+        allow read, create: if isHouseholdMember(hId);
+        allow update, delete: if isHouseholdMember(hId);
+      }
+
+      match /categories/{id} {
+        allow read, create: if isHouseholdMember(hId);
+        allow update: if isHouseholdMember(hId);
+        allow delete: if false; // archive instead (PRD §38)
+      }
+
+      match /budgets/{id} {
+        allow read, create, update, delete: if isHouseholdMember(hId);
+      }
+
+      match /accounts/{id} {
+        allow read, create, update: if isHouseholdMember(hId);
+        allow delete: if false; // archive instead
+      }
+
+      match /goals/{id} {
+        allow read, create, update, delete: if isHouseholdMember(hId);
+      }
+
+      match /goalContributions/{id} {
+        allow read, create: if isHouseholdMember(hId);
+        allow update, delete: if false; // contributions are immutable history
+      }
+
+      match /bills/{id} {
+        allow read, create, update, delete: if isHouseholdMember(hId);
+      }
+
+      /* ----------------------------- activity -------------------------- */
+      match /activity/{id} {
+        allow read, create: if isHouseholdMember(hId);
+        allow update, delete: if false; // append-only audit trail
+      }
+
+      /* --------------------------- notifications ----------------------- */
+      match /notifications/{id} {
+        allow read: if isHouseholdMember(hId);
+        allow create: if isHouseholdMember(hId);
+        // only the recipient may mark their own notification read
+        allow update: if isHouseholdMember(hId)
+          && resource.data.uid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        allow delete: if false;
+      }
+
+      match /settings/{id} {
+        allow read, write: if isHouseholdMember(hId);
+      }
+    }
+  }
+}
