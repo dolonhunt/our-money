@@ -32,9 +32,9 @@ export async function createHousehold(
   const db = getDb();
   const householdRef = doc(collection(db, "households"));
   const inviteCode = randomCode(6);
-  const batch1 = writeBatch(db);
 
-  batch1.set(householdRef, {
+  // 1. Commit household document first so parent exists for security rules
+  await setDoc(householdRef, {
     name,
     currency,
     inviteCode,
@@ -43,7 +43,8 @@ export async function createHousehold(
     updatedAt: serverTimestamp(),
   });
 
-  batch1.set(doc(householdRef, "members", user.uid), {
+  // 2. Commit owner member document (rules verify parent household doc)
+  await setDoc(doc(householdRef, "members", user.uid), {
     uid: user.uid,
     role: "owner",
     displayName: user.displayName,
@@ -52,22 +53,22 @@ export async function createHousehold(
     joinedAt: serverTimestamp(),
   });
 
-  await batch1.commit();
+  // 3. Update user profile to link to household
+  await setUserHousehold(user.uid, householdRef.id, "owner");
 
-  // Seed default categories after owner member document is committed
-  const batch2 = writeBatch(db);
+  // 4. Seed default categories (non-blocking)
+  const catBatch = writeBatch(db);
   for (const cat of DEFAULT_CATEGORIES) {
-    batch2.set(doc(householdRef, "categories", cat.id), {
+    catBatch.set(doc(householdRef, "categories", cat.id), {
       ...cat,
       createdBy: user.uid,
       createdAt: serverTimestamp(),
     });
   }
-  await batch2.commit().catch((err) => {
-    console.warn("Seeding default categories failed (safe to ignore):", err);
+  await catBatch.commit().catch((err) => {
+    console.warn("Seeding default categories non-fatal warning:", err);
   });
 
-  await setUserHousehold(user.uid, householdRef.id, "owner");
   logActivity(householdRef.id, {
     actorId: user.uid,
     action: "household.created",
@@ -75,6 +76,7 @@ export async function createHousehold(
     entityId: householdRef.id,
     description: `${user.displayName} created the money space “${name}”`,
   }).catch(() => undefined);
+
   return { id: householdRef.id, inviteCode };
 }
 

@@ -59,11 +59,14 @@ service cloud.firestore {
         }
 
         allow read: if isHouseholdMember(hId) || isSelf(uid);
-        // path 1: the household owner creates their own owner doc (batch create);
+        // path 1: the household owner creates their own owner doc (supports sequential or batch write);
         // path 2: a partner joins with the invite code as role "member"
         allow create: if (isSelf(uid)
             && request.resource.data.role == 'owner'
-            && get(/databases/$(database)/documents/households/$(hId)).data.ownerUid == request.auth.uid)
+            && (
+              (exists(/databases/$(database)/documents/households/$(hId)) && get(/databases/$(database)/documents/households/$(hId)).data.ownerUid == request.auth.uid)
+              || (existsAfter(/databases/$(database)/documents/households/$(hId)) && getAfter(/databases/$(database)/documents/households/$(hId)).data.ownerUid == request.auth.uid)
+            ))
           || (isSelf(uid)
               && request.resource.data.role == 'member'
               && joinCodeMatches());
@@ -82,7 +85,8 @@ service cloud.firestore {
       match /categories/{id} {
         allow read: if isHouseholdMember(hId);
         allow create: if isHouseholdMember(hId)
-          || (signedIn() && get(/databases/$(database)/documents/households/$(hId)).data.ownerUid == request.auth.uid);
+          || (signedIn() && exists(/databases/$(database)/documents/households/$(hId)) && get(/databases/$(database)/documents/households/$(hId)).data.ownerUid == request.auth.uid)
+          || (signedIn() && existsAfter(/databases/$(database)/documents/households/$(hId)) && getAfter(/databases/$(database)/documents/households/$(hId)).data.ownerUid == request.auth.uid);
         allow update: if isHouseholdMember(hId);
         allow delete: if false; // archive instead (PRD §38)
       }

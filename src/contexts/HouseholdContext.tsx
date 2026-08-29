@@ -101,14 +101,17 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
   // stale profile link ourselves — security rules forbid cross-user writes.
   useEffect(() => {
     if (!householdId || !profile || removalHandled.current || loading) return;
-    const stillMember = members.some((m) => m.uid === profile.uid);
-    if (!stillMember) {
+    const isOwner = household?.ownerUid === profile.uid;
+    const householdDissolved = !loading && household === null;
+    const explicitlyRemoved = !loading && members.length > 0 && !members.some((m) => m.uid === profile.uid) && !isOwner;
+
+    if (householdDissolved || explicitlyRemoved) {
       removalHandled.current = true;
       setUserHousehold(profile.uid, null, null)
         .then(() => router.replace("/onboarding"))
         .catch(() => undefined);
     }
-  }, [householdId, members, loading, profile, router]);
+  }, [householdId, household, members, loading, profile, router]);
 
   const value = useMemo<HouseholdState>(() => {
     const me = members.find((m) => m.uid === profile?.uid) ?? null;

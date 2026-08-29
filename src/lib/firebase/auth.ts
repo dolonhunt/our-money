@@ -101,11 +101,11 @@ export interface ProfilePatch {
 }
 
 export async function updateUserProfile(uid: string, patch: ProfilePatch): Promise<void> {
-  await updateDoc(doc(getDb(), "users", uid), { ...patch, updatedAt: serverTimestamp() });
+  await setDoc(doc(getDb(), "users", uid), { ...patch, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 export async function setUserHousehold(uid: string, householdId: string | null, role: Role | null): Promise<void> {
-  await updateDoc(doc(getDb(), "users", uid), { householdId, role, updatedAt: serverTimestamp() });
+  await setDoc(doc(getDb(), "users", uid), { householdId, role, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 /** Friendly auth error messages (PRD §55 — never surface raw Firebase errors). */
