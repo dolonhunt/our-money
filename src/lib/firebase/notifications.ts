@@ -59,6 +59,7 @@ export function notifyPartners(
   for (const uid of memberUids) {
     if (uid === actorUid) continue;
     notifyQuietly(householdId, {
+      householdId,
       uid,
       actorId: actorUid,
       read: false,

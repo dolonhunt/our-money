@@ -75,6 +75,7 @@ export async function checkBudgetAlerts(
     if (ratio >= 1) {
       for (const uid of memberUids) {
         await createNotification(householdId, {
+          householdId,
           uid,
           actorId: null,
           read: false,
@@ -89,6 +90,7 @@ export async function checkBudgetAlerts(
     } else if (ratio >= 0.9) {
       for (const uid of memberUids) {
         await createNotification(householdId, {
+          householdId,
           uid,
           actorId: null,
           read: false,

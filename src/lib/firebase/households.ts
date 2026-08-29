@@ -112,6 +112,7 @@ export async function joinHousehold(
   });
   for (const m of existing) {
     notifyQuietly(householdId, {
+      householdId,
       uid: m.uid,
       actorId: user.uid,
       read: false,

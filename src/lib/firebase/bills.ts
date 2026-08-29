@@ -180,6 +180,7 @@ export async function checkBillReminders(householdId: string, bills: Bill[], mem
     if (status === "due-soon" || status === "overdue") {
       for (const uid of memberUids) {
         await createNotification(householdId, {
+          householdId,
           uid,
           actorId: null,
           read: false,

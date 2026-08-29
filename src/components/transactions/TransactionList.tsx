@@ -75,7 +75,7 @@ export function TransactionList({ transactions, presetFilters, presetLabel }: { 
       list.push(t);
       map.set(t.date, list);
     }
-    return [...map.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
+    return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
   }, [visible]);
 
   const catOf = (id: string) => categories.find((c) => c.id === id);
