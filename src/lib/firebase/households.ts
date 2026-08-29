@@ -24,15 +24,20 @@ import { getDb } from "./firestore";
 export const MAX_MEMBERS = 2;
 
 /** Create a new money space owned by the current user, with default categories seeded. */
-export async function createHousehold(user: UserProfile, name: string, currency: string): Promise<string> {
+export async function createHousehold(
+  user: UserProfile,
+  name: string,
+  currency: string
+): Promise<{ id: string; inviteCode: string }> {
   const db = getDb();
   const householdRef = doc(collection(db, "households"));
+  const inviteCode = randomCode(6);
   const batch1 = writeBatch(db);
 
   batch1.set(householdRef, {
     name,
     currency,
-    inviteCode: randomCode(6),
+    inviteCode,
     ownerUid: user.uid,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -58,7 +63,9 @@ export async function createHousehold(user: UserProfile, name: string, currency:
       createdAt: serverTimestamp(),
     });
   }
-  await batch2.commit().catch(() => undefined);
+  await batch2.commit().catch((err) => {
+    console.warn("Seeding default categories failed (safe to ignore):", err);
+  });
 
   await setUserHousehold(user.uid, householdRef.id, "owner");
   logActivity(householdRef.id, {
@@ -68,7 +75,7 @@ export async function createHousehold(user: UserProfile, name: string, currency:
     entityId: householdRef.id,
     description: `${user.displayName} created the money space “${name}”`,
   }).catch(() => undefined);
-  return householdRef.id;
+  return { id: householdRef.id, inviteCode };
 }
 
 /** Verify an invite and join the household. Throws friendly errors (PRD §55). */
