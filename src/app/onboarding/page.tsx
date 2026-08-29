@@ -47,7 +47,7 @@ export default function OnboardingPage() {
       router.replace("/login");
       return;
     }
-    if (profile?.householdId) {
+    if (profile?.householdId && step !== 2) {
       router.replace("/dashboard");
       return;
     }
