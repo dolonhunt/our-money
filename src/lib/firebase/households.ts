@@ -57,13 +57,13 @@ export async function createHousehold(user: UserProfile, name: string, currency:
 
   await batch.commit();
   await setUserHousehold(user.uid, householdRef.id, "owner");
-  await logActivity(householdRef.id, {
+  logActivity(householdRef.id, {
     actorId: user.uid,
     action: "household.created",
     entityType: "household",
     entityId: householdRef.id,
     description: `${user.displayName} created the money space “${name}”`,
-  });
+  }).catch(() => undefined);
   return householdRef.id;
 }
 
