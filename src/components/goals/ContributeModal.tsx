@@ -30,7 +30,7 @@ export function ContributeModal({ open, onClose, goal, onSaved }: { open: boolea
     setError(null);
     const amt = parseFloat(amount);
     if (!Number.isFinite(amt) || amt <= 0) return setError("Enter an amount.");
-    if (!householdId || !profile) return;
+    if (!householdId || !profile || !goal) return;
     setBusy(true);
     try {
       await contributeToGoal(householdId, goal.id, profile.uid, memberUids, {

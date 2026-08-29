@@ -14,7 +14,7 @@ import { Avatar } from "@/components/ui/primitives";
 
 type Filter = "all" | "unread" | NotificationType;
 
-const TYPE_ICON: Record<NotificationType, ComponentType<{ size?: number; className?: string }>> = {
+const TYPE_ICON: Record<NotificationType, ComponentType<{ size?: number | string; className?: string }>> = {
   partner: Users,
   budget: Wallet,
   bill: Receipt,

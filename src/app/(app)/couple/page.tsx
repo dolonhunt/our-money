@@ -53,7 +53,7 @@ export default function CouplePage() {
   }
 
   async function saveSettings() {
-    if (!name.trim()) return toast.error("The space needs a name.");
+    if (!householdId || !name.trim()) return toast.error("The space needs a name.");
     setBusy(true);
     try {
       await updateHouseholdSettings(householdId, { name: name.trim(), currency });
@@ -66,7 +66,7 @@ export default function CouplePage() {
   }
 
   async function doLeave() {
-    if (!profile) return;
+    if (!profile || !household) return;
     setBusy(true);
     try {
       const result = await leaveHousehold(profile, household, members.length);
@@ -81,6 +81,7 @@ export default function CouplePage() {
   }
 
   async function doRemove(uid: string) {
+    if (!householdId) return;
     setBusy(true);
     try {
       await removeMember(householdId, uid);
@@ -94,6 +95,7 @@ export default function CouplePage() {
   }
 
   async function doTransfer(uid: string) {
+    if (!householdId) return;
     setBusy(true);
     try {
       await transferOwnership(householdId, uid);
