@@ -6,6 +6,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 import type { UserProfile } from "@/types";
 import { authErrorMessage, ensureUserProfile, getAuthInstance, sendResetEmail, signInWithEmail, signInWithGoogle, signOutUser, signUpWithEmail } from "@/lib/firebase/auth";
 import { getDb } from "@/lib/firebase/firestore";
+import { isFirebaseConfigured, firebaseSetupHint } from "@/lib/firebase/config";
 
 interface AuthState {
   user: User | null;
@@ -37,32 +38,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isFirebaseConfigured) {
+      setLoading(false);
+      return;
+    }
     let unsubProfile: (() => void) | undefined;
-    const unsub = onAuthStateChanged(getAuthInstance(), async (u) => {
-      unsubProfile?.();
-      setUser(u);
-      if (u) {
-        try {
-          await ensureUserProfile(u);
-        } catch {
-          /* profile ensured on next tick; read may still succeed */
+    let unsubAuth: (() => void) | undefined;
+    try {
+      unsubAuth = onAuthStateChanged(getAuthInstance(), async (u) => {
+        unsubProfile?.();
+        setUser(u);
+        if (u) {
+          try {
+            await ensureUserProfile(u);
+          } catch {
+            /* profile ensured on next tick; read may still succeed */
+          }
+          unsubProfile = onSnapshot(
+            doc(getDb(), "users", u.uid),
+            (snap) => {
+              setProfile(snap.exists() ? ({ uid: snap.id, ...snap.data() } as UserProfile) : null);
+              setLoading(false);
+            },
+            () => setLoading(false)
+          );
+        } else {
+          setProfile(null);
+          setLoading(false);
         }
-        unsubProfile = onSnapshot(
-          doc(getDb(), "users", u.uid),
-          (snap) => {
-            setProfile(snap.exists() ? ({ uid: snap.id, ...snap.data() } as UserProfile) : null);
-            setLoading(false);
-          },
-          () => setLoading(false)
-        );
-      } else {
-        setProfile(null);
-        setLoading(false);
-      }
-    });
+      });
+    } catch {
+      setLoading(false);
+    }
     return () => {
       unsubProfile?.();
-      unsub();
+      unsubAuth?.();
     };
   }, []);
 
@@ -72,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       loading,
       async signUp(name, email, password) {
+        if (!isFirebaseConfigured) throw new FriendlyAuthError(firebaseSetupHint());
         try {
           await signUpWithEmail(name, email, password);
         } catch (e) {
@@ -79,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       },
       async login(email, password) {
+        if (!isFirebaseConfigured) throw new FriendlyAuthError(firebaseSetupHint());
         try {
           await signInWithEmail(email, password);
         } catch (e) {
@@ -86,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       },
       async loginWithGoogle() {
+        if (!isFirebaseConfigured) throw new FriendlyAuthError(firebaseSetupHint());
         try {
           await signInWithGoogle();
         } catch (e) {
@@ -93,9 +106,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       },
       async logout() {
+        if (!isFirebaseConfigured) return;
         await signOutUser();
       },
       async resetPassword(email) {
+        if (!isFirebaseConfigured) throw new FriendlyAuthError(firebaseSetupHint());
         try {
           await sendResetEmail(email);
         } catch (e) {
