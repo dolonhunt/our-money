@@ -490,7 +490,7 @@ export default function ReportsPage() {
             <div className="neu-card-sm flex flex-col gap-1 p-4">
               <span className="text-[10.5px] font-bold uppercase tracking-wider text-faint">Current Balance</span>
               <span className="display-number text-[20px] text-ink">{money(forecast.currentBalance)}</span>
-              <span className="text-[11px] text-sub">Today's combined funds</span>
+              <span className="text-[11px] text-sub">Today&apos;s combined funds</span>
             </div>
 
             <div className="neu-card-sm flex flex-col gap-1 p-4">
