@@ -177,6 +177,7 @@ export interface Bill {
   paidAt: Timestamp | null;
   paidTransactionId: string | null;
   ownership: Ownership;
+  isSubscription?: boolean;
   createdBy: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;

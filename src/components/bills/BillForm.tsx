@@ -21,6 +21,7 @@ export function BillForm({ open, onClose, editing, onSaved }: { open: boolean; o
   const [categoryId, setCategoryId] = useState(editing?.categoryId ?? "utilities");
   const [accountId, setAccountId] = useState(editing?.accountId ?? "");
   const [recurring, setRecurring] = useState<Recurring>(editing?.recurring ?? "monthly");
+  const [isSubscription, setIsSubscription] = useState<boolean>(editing?.isSubscription ?? false);
   const [reminderDays, setReminderDays] = useState(String(editing?.reminderDays ?? 3));
   const [ownership, setOwnership] = useState<Ownership>(editing?.ownership ?? "shared");
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +40,17 @@ export function BillForm({ open, onClose, editing, onSaved }: { open: boolean; o
       await saveBill(
         householdId,
         profile.uid,
-        { name: name.trim(), amount: amt, dueDate, categoryId: categoryId || null, accountId: accountId || null, recurring, reminderDays: Math.max(1, parseInt(reminderDays) || 3), ownership },
+        {
+          name: name.trim(),
+          amount: amt,
+          dueDate,
+          categoryId: categoryId || null,
+          accountId: accountId || null,
+          recurring,
+          reminderDays: Math.max(1, parseInt(reminderDays) || 3),
+          ownership,
+          isSubscription,
+        },
         editing?.id
       );
       toast.success(editing ? "Bill updated" : "Bill added");
@@ -108,6 +119,18 @@ export function BillForm({ open, onClose, editing, onSaved }: { open: boolean; o
           <Field label="Visibility">
             <Segmented ariaLabel="Bill visibility" value={ownership} onChange={setOwnership} options={[{ value: "shared", label: "Shared" }, { value: "personal", label: "Personal" }]} />
           </Field>
+        </div>
+        <div className="flex items-center gap-2 px-1">
+          <input
+            id="bl-sub"
+            type="checkbox"
+            checked={isSubscription}
+            onChange={(e) => setIsSubscription(e.target.checked)}
+            className="h-4 w-4 rounded text-teal focus:ring-teal cursor-pointer"
+          />
+          <label htmlFor="bl-sub" className="text-[13px] font-medium text-ink cursor-pointer">
+            This is a recurring subscription (Streaming, Software, Internet, etc.)
+          </label>
         </div>
         {error && <p className="text-[13px] font-medium text-danger" role="alert">{error}</p>}
         <NeuButton type="submit" variant="primary" size="lg" loading={busy} className="w-full">

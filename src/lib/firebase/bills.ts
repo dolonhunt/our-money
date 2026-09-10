@@ -29,6 +29,7 @@ export interface BillInput {
   recurring: Recurring;
   reminderDays: number;
   ownership: Ownership;
+  isSubscription?: boolean;
 }
 
 export async function saveBill(householdId: string, actorUid: string, input: BillInput, existingId?: string): Promise<string> {
@@ -46,6 +47,7 @@ export async function saveBill(householdId: string, actorUid: string, input: Bil
     paidAt: null,
     paidTransactionId: null,
     ownership: input.ownership,
+    isSubscription: Boolean(input.isSubscription),
     createdBy: actorUid,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

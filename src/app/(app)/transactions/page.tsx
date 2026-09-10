@@ -2,13 +2,14 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus } from "lucide-react";
+import { FileSpreadsheet, Plus } from "lucide-react";
 import { useHousehold } from "@/contexts/HouseholdContext";
 import { useQuickAdd } from "@/contexts/QuickAddContext";
 import { useTransactions } from "@/hooks/data";
 import { PageLoader } from "@/components/ui/feedback";
 import { FadeUp, NeuButton, SectionHead } from "@/components/ui/primitives";
 import { TransactionList, type TxFilters } from "@/components/transactions/TransactionList";
+import { CSVImportExportModal } from "@/components/transactions/CSVImportExportModal";
 import { monthRange, todayISO } from "@/lib/dates";
 
 function TransactionsInner() {
@@ -17,6 +18,7 @@ function TransactionsInner() {
   const { open } = useQuickAdd();
   const { items: transactions } = useTransactions(householdId);
   const [preset, setPreset] = useState<Partial<TxFilters>>({});
+  const [csvOpen, setCsvOpen] = useState(false);
   const categoryParam = params.get("category");
   const monthParam = params.get("month");
 
@@ -38,15 +40,26 @@ function TransactionsInner() {
           title="Transactions"
           subtitle={`${scoped.filter((t) => !t.deletedAt).length} this month · all money in and out`}
           action={
-            <NeuButton variant="primary" onClick={() => open("expense")}>
-              <Plus size={16} aria-hidden /> Add
-            </NeuButton>
+            <div className="flex gap-2">
+              <NeuButton variant="ghost" size="sm" onClick={() => setCsvOpen(true)}>
+                <FileSpreadsheet size={15} aria-hidden /> CSV
+              </NeuButton>
+              <NeuButton variant="primary" size="sm" onClick={() => open("expense")}>
+                <Plus size={15} aria-hidden /> Add
+              </NeuButton>
+            </div>
           }
         />
       </FadeUp>
       <FadeUp delay={0.06}>
         <TransactionList transactions={scoped} presetFilters={preset} />
       </FadeUp>
+
+      <CSVImportExportModal
+        open={csvOpen}
+        onClose={() => setCsvOpen(false)}
+        transactions={transactions}
+      />
     </div>
   );
 }
