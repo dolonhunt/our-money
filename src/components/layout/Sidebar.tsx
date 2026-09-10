@@ -20,8 +20,63 @@ export function Sidebar() {
 
   return (
     <aside className="sticky top-0 hidden h-screen w-[264px] shrink-0 flex-col gap-5 p-5 lg:flex" aria-label="Main navigation">
+      <div className="flex items-center gap-2 px-3 pt-2">
+        <div className="relative flex h-7 w-9 items-center justify-center">
+          <div className="absolute left-0 h-6 w-6 rounded-full bg-mint mix-blend-multiply opacity-90"></div>
+          <div className="absolute right-0 h-6 w-6 rounded-full bg-teal mix-blend-multiply opacity-90"></div>
+        </div>
+        <span className="font-display text-lg font-bold tracking-tight text-ink">Our Money</span>
+      </div>
+
+      <nav className="neu-card flex flex-1 flex-col overflow-y-auto p-3">
+        {(() => {
+          const groups: Record<string, typeof NAV_ITEMS> = {};
+          NAV_ITEMS.forEach(item => {
+            const g = item.group || "none";
+            if (!groups[g]) groups[g] = [];
+            groups[g].push(item);
+          });
+          
+          return Object.entries(groups).map(([group, items], i) => (
+            <div key={group} className={i > 0 && group !== "Together" ? "mt-5" : (group === "Together" ? "mt-3" : "")}>
+              {group === "Together" && (
+                <div className="my-4 mx-2 h-px bg-line opacity-50" />
+              )}
+              {group !== "none" && (
+                <div className="mb-2 px-3 text-[10.5px] font-bold uppercase tracking-[0.15em] text-faint">
+                  {group}
+                </div>
+              )}
+              <div className="flex flex-col gap-1">
+                {items.map((item) => {
+                  const active = pathname === item.href || pathname.startsWith(item.href + "/");
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className="neu-nav-item"
+                      data-active={active}
+                      aria-current={active ? "page" : undefined}
+                    >
+                      <Icon size={18} strokeWidth={active ? 2.4 : 2} aria-hidden />
+                      <span className="flex-1 text-left">{item.label}</span>
+                      {item.badge === "notifications" && unread > 0 && (
+                        <span className="neu-inset-sm flex h-6 min-w-6 items-center justify-center rounded-full bg-teal px-1.5 text-[11px] font-bold text-white" style={{ boxShadow: "none" }}>
+                          {unread > 9 ? "9+" : unread}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ));
+        })()}
+      </nav>
+
+      {/* Couple Identity Card at bottom (PRD §12, Phase 1 Dashboard) */}
       <div className="neu-card flex flex-col gap-4 p-5">
-        {/* Couple / household header */}
         <Link href="/couple" className="flex items-center gap-3" aria-label="Open couple page">
           <span className="flex -space-x-2.5">
             {members.slice(0, 2).map((m, i) => (
@@ -34,48 +89,17 @@ export function Sidebar() {
             <span className="block text-[12px] text-sub">{members.length} member{members.length === 1 ? "" : "s"}</span>
           </span>
         </Link>
-        <SyncBadge />
-      </div>
-
-      <nav className="neu-card flex flex-1 flex-col gap-1 overflow-y-auto p-3">
-        {NAV_ITEMS.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="neu-nav-item"
-              data-active={active}
-              aria-current={active ? "page" : undefined}
-            >
-              <Icon size={18} strokeWidth={active ? 2.4 : 2} aria-hidden />
-              <span className="flex-1 text-left">{item.label}</span>
-              {item.badge === "notifications" && unread > 0 && (
-                <span className="neu-inset-sm flex h-6 min-w-6 items-center justify-center rounded-full bg-teal px-1.5 text-[11px] font-bold text-white" style={{ boxShadow: "none" }}>
-                  {unread > 9 ? "9+" : unread}
-                </span>
-              )}
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* Profile section at bottom (PRD §12) */}
-      <div className="neu-card flex items-center gap-3 p-4">
-        <Avatar name={profile?.displayName ?? "?"} photoURL={profile?.photoURL} size={38} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-ink">{profile?.displayName}</p>
-          <p className="truncate text-[12px] text-sub">{profile?.email}</p>
+        <div className="flex items-center justify-between">
+          <SyncBadge />
+          <button
+            onClick={() => logout()}
+            className="text-[12px] font-semibold text-sub hover:text-ink transition-colors"
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            Sign out
+          </button>
         </div>
-        <button
-          onClick={() => logout()}
-          className="neu-btn !rounded-xl !p-2.5"
-          aria-label="Sign out"
-          title="Sign out"
-        >
-          <LogOut size={16} aria-hidden />
-        </button>
       </div>
     </aside>
   );

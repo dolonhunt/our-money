@@ -15,6 +15,7 @@ import { HeroOurMoney } from "@/components/dashboard/HeroOurMoney";
 import { MoneyFlow } from "@/components/dashboard/MoneyFlow";
 import { SpendingBreakdown } from "@/components/dashboard/SpendingBreakdown";
 import { BudgetsSummary, GoalsSummary } from "@/components/dashboard/BudgetsGoalsSummary";
+import { RecentTransactions } from "@/components/dashboard/RecentTransactions";
 import { TogetherFeed } from "@/components/dashboard/TogetherFeed";
 import { materializeRecurringTransactions } from "@/lib/firebase/transactions";
 import { checkBudgetAlerts } from "@/lib/firebase/budgets";
@@ -74,95 +75,120 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="flex flex-col gap-8 lg:gap-10">
-      {/* Header: greeting + month selector (PRD §20) */}
-      <FadeUp>
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="font-display text-[24px] font-semibold tracking-tight text-ink md:text-[28px]">{greeting.text}</h1>
-            <p className="mt-0.5 text-[13.5px] text-sub">
-              {greeting.couple} · {members.length === 2 ? "both of you are in sync" : "invite your partner from the Couple page"}
-            </p>
+    <div className="flex flex-col xl:flex-row gap-8 lg:gap-10 items-start">
+      {/* Zone B: Main content area */}
+      <div className="flex-1 flex flex-col gap-8 lg:gap-10 min-w-0">
+        {/* Header: greeting + month selector (PRD §20) */}
+        <FadeUp>
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-sub mb-1">GOOD MORNING</p>
+              <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink md:text-[32px]">{greeting.text}</h1>
+              <p className="mt-1 text-[14px] text-sub">
+                {greeting.couple} · {members.length === 2 ? "both of you are in sync" : "invite your partner from the Couple page"}
+              </p>
+            </div>
+            <div className="neu-pill flex items-center gap-1 !py-1.5" role="group" aria-label="Month selector">
+              <NeuButton variant="ghost" size="sm" className="!rounded-full !p-1.5" aria-label="Previous month" onClick={() => setMonth(addMonths(month, -1))}>
+                <ChevronLeft size={16} />
+              </NeuButton>
+              <span className="min-w-[118px] text-center font-display text-[13.5px] font-semibold text-ink">{monthLabel(month)}</span>
+              <NeuButton variant="ghost" size="sm" className="!rounded-full !p-1.5" aria-label="Next month" onClick={() => setMonth(addMonths(month, 1))} disabled={month >= currentMonth()}>
+                <ChevronRight size={16} />
+              </NeuButton>
+            </div>
           </div>
-          <div className="neu-pill flex items-center gap-1 !py-1.5" role="group" aria-label="Month selector">
-            <NeuButton variant="ghost" size="sm" className="!rounded-full !p-1.5" aria-label="Previous month" onClick={() => setMonth(addMonths(month, -1))}>
-              <ChevronLeft size={16} />
-            </NeuButton>
-            <span className="min-w-[118px] text-center font-display text-[13.5px] font-semibold text-ink">{monthLabel(month)}</span>
-            <NeuButton variant="ghost" size="sm" className="!rounded-full !p-1.5" aria-label="Next month" onClick={() => setMonth(addMonths(month, 1))} disabled={month >= currentMonth()}>
-              <ChevronRight size={16} />
-            </NeuButton>
-          </div>
-        </div>
-      </FadeUp>
+        </FadeUp>
 
-      {/* Hero + overview (PRD §21, §26, §68) */}
-      <FadeUp delay={0.05}>
-        <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
-          {txLoading ? (
-            <Skeleton className="h-[300px]" />
-          ) : (
-            <HeroOurMoney
-              balance={balance}
-              income={totals.income}
-              expense={totals.expense}
-              net={totals.net}
-              savingsRate={totals.savingsRate}
-              incomeDelta={deltaPct(totals.income, prev.income)}
-              expenseDelta={deltaPct(totals.expense, prev.expense)}
-            />
-          )}
-          <FadeUp delay={0.12} className="flex flex-col gap-4">
-            <OverviewTile label="Our Income" value={money(totals.income)} delta={deltaPct(totals.income, prev.income)} good tint="teal" loading={txLoading} />
-            <OverviewTile label="Our Spending" value={money(totals.expense)} delta={deltaPct(totals.expense, prev.expense)} tint="peach" loading={txLoading} />
-            <OverviewTile label="Our Savings" value={`${money(totals.net)} · ${pct(totals.savingsRate * 100, 0)}`} delta={deltaPct(totals.net, prev.net)} good tint="teal" loading={txLoading} />
+        {/* Hero + overview (PRD §21, §26, §68) */}
+        <FadeUp delay={0.05}>
+          <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
+            {txLoading ? (
+              <Skeleton className="h-[300px]" />
+            ) : (
+              <HeroOurMoney
+                balance={balance}
+                income={totals.income}
+                expense={totals.expense}
+                net={totals.net}
+                savingsRate={totals.savingsRate}
+                incomeDelta={deltaPct(totals.income, prev.income)}
+                expenseDelta={deltaPct(totals.expense, prev.expense)}
+                members={members}
+              />
+            )}
+            <FadeUp delay={0.12} className="grid grid-cols-2 gap-4">
+              <OverviewTile label="Our Income" value={money(totals.income)} delta={deltaPct(totals.income, prev.income)} good tint="teal" loading={txLoading} />
+              <OverviewTile label="Our Expenses" value={money(totals.expense)} delta={deltaPct(totals.expense, prev.expense)} tint="peach" loading={txLoading} />
+              <OverviewTile label="Our Savings" value={money(totals.net)} delta={deltaPct(totals.net, prev.net)} good tint="teal" loading={txLoading} />
+              <OverviewTile label="Savings Rate" value={pct(totals.savingsRate * 100, 0)} delta={null} tint="teal" loading={txLoading} />
+            </FadeUp>
+          </div>
+        </FadeUp>
+
+        {/* Money flow + spending (PRD §23–26) */}
+        <div className="grid gap-8 lg:grid-cols-2">
+          <FadeUp delay={0.05}>
+            <MoneyFlow transactions={transactions} currentMonth={month} />
+          </FadeUp>
+          <FadeUp delay={0.1}>
+            <SpendingBreakdown transactions={transactions} categories={categories} month={month} />
           </FadeUp>
         </div>
-      </FadeUp>
 
-      {/* Quick actions (PRD §13) */}
-      <FadeUp delay={0.1}>
-        <div className="grid grid-cols-5 gap-2.5 lg:hidden" aria-label="Quick actions">
-          {quickActions.map((a) => (
-            <button key={a.label} onClick={a.onClick} className="neu-btn flex flex-col items-center gap-1.5 !rounded-2xl px-1 py-3.5 text-[10.5px] font-semibold">
-              <span className={`neu-inset-sm flex h-9 w-9 items-center justify-center rounded-full ${a.tint}`}>{a.icon}</span>
-              {a.label}
-            </button>
-          ))}
+        {/* Budgets + goals (PRD §27–28) */}
+        <div className="grid gap-8 lg:grid-cols-2">
+          <FadeUp delay={0.05}>
+            <BudgetsSummary budgets={budgets} transactions={transactions} categories={categories} month={month} />
+          </FadeUp>
+          <FadeUp delay={0.1}>
+            <GoalsSummary goals={goals} />
+          </FadeUp>
         </div>
-        <div className="hidden gap-2.5 lg:flex" aria-label="Quick actions">
-          {quickActions.map((a) => (
-            <NeuButton key={a.label} onClick={a.onClick} className="!rounded-2xl">
-              <span className={a.tint}>{a.icon}</span> Add {a.label}
+
+        {/* Recent Transactions */}
+        <FadeUp delay={0.15}>
+          <RecentTransactions transactions={transactions} />
+        </FadeUp>
+      </div>
+
+      {/* Zone C: Right rail (PRD §13, §29) */}
+      <div className="w-full xl:w-[320px] shrink-0 flex flex-col gap-8">
+        <FadeUp delay={0.1}>
+          <div className="neu-card-sm p-5 bg-gradient-to-br from-mint/10 to-teal/10 border-teal/20">
+            <h3 className="font-display font-semibold text-ink text-lg mb-2">Small steps to big dreams together</h3>
+            <p className="text-sm text-sub mb-4">You&apos;re making great progress. Keep funding your shared goals.</p>
+            <NeuButton className="w-full" onClick={() => open("contribution")}>
+              Add a Goal
             </NeuButton>
-          ))}
-        </div>
-      </FadeUp>
-
-      {/* Money flow + spending (PRD §23–26) */}
-      <div className="grid gap-8 xl:grid-cols-2">
-        <FadeUp delay={0.05}>
-          <MoneyFlow transactions={transactions} currentMonth={month} />
+          </div>
         </FadeUp>
-        <FadeUp delay={0.1}>
-          <SpendingBreakdown transactions={transactions} categories={categories} month={month} />
+
+        <FadeUp delay={0.15}>
+          <div className="grid grid-cols-5 xl:grid-cols-2 gap-3" aria-label="Quick actions">
+            {quickActions.map((a) => (
+              <button key={a.label} onClick={a.onClick} className="neu-btn flex flex-col xl:flex-row items-center gap-2 !rounded-2xl px-2 py-3 xl:p-3 text-[11px] xl:text-[13px] font-semibold text-center xl:text-left">
+                <span className={`neu-inset-sm flex h-9 w-9 xl:h-10 xl:w-10 shrink-0 items-center justify-center rounded-full ${a.tint}`}>{a.icon}</span>
+                <span className="leading-tight">{a.label}</span>
+              </button>
+            ))}
+          </div>
+        </FadeUp>
+
+        <FadeUp delay={0.2}>
+          <TogetherFeed activity={activity} members={members} />
+        </FadeUp>
+
+        <FadeUp delay={0.25}>
+          <div className="neu-card-sm p-6 text-center">
+            <div className="w-16 h-16 bg-peach/10 rounded-full mx-auto mb-3 flex items-center justify-center text-orange">
+              <Target size={28} />
+            </div>
+            <h4 className="font-display font-semibold text-ink">Build the life you both love</h4>
+            <p className="text-xs text-sub mt-2">Consistent saving makes everything possible.</p>
+          </div>
         </FadeUp>
       </div>
-
-      {/* Budgets + goals (PRD §27–28) */}
-      <div className="grid gap-8 xl:grid-cols-2">
-        <FadeUp delay={0.05}>
-          <BudgetsSummary budgets={budgets} transactions={transactions} categories={categories} month={month} />
-        </FadeUp>
-        <FadeUp delay={0.1}>
-          <GoalsSummary goals={goals} />
-        </FadeUp>
-      </div>
-
-      {/* Together activity (PRD §29) */}
-      <FadeUp delay={0.05}>
-        <TogetherFeed activity={activity} members={members} />
-      </FadeUp>
     </div>
   );
 }

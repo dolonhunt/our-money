@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { Inter, Poppins } from "next/font/google";
+import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ToastProvider } from "@/contexts/ToastContext";
@@ -8,9 +8,9 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { HouseholdProvider } from "@/contexts/HouseholdContext";
 import PWARegister from "@/components/layout/PWARegister";
 
-const display = Poppins({
+const display = Playfair_Display({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700", "800", "900"],
   variable: "--font-display",
   display: "swap",
 });
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#F3F5F7",
+  themeColor: "#F5F3EF",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",

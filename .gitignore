@@ -31,3 +31,4 @@ next-env.d.ts
 
 # security scan artifacts
 .mimosa/
+docs/reference-ui.png
