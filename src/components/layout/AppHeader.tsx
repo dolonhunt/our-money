@@ -7,6 +7,7 @@ import { useNotifications } from "@/hooks/data";
 import { useQuickAdd } from "@/contexts/QuickAddContext";
 import { SyncBadge } from "./SyncBadge";
 import { Avatar, NeuButton } from "@/components/ui/primitives";
+import { CurrencySwitcher } from "@/components/currency/CurrencySwitcher";
 
 /** Top bar: Mobile (household + add) and Desktop (search + notifications + profile) */
 export function AppHeader() {
@@ -37,6 +38,7 @@ export function AppHeader() {
           </span>
         </Link>
         <div className="ml-auto flex items-center gap-2">
+          <CurrencySwitcher compact />
           <Link
             href="/notifications"
             className="neu-btn relative !rounded-full !p-2.5"
@@ -67,7 +69,8 @@ export function AppHeader() {
           </button>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <CurrencySwitcher />
           <div className="hidden md:flex neu-pill items-center px-4 py-2 gap-2 text-[13px] font-bold text-ink tracking-wide">
             <Calendar size={14} className="text-sub" aria-hidden />
             <span>{currentMonthLabel}</span>

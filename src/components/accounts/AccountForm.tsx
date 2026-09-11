@@ -8,6 +8,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { Field, NeuButton, NeuInput, NeuSelect, Segmented } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/overlay";
 import { createAccount, updateAccount } from "@/lib/firebase/accounts";
+import { DEFAULT_CURRENCY, SUPPORTED_CURRENCIES } from "@/lib/currency";
 
 export const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: "cash", label: "Cash" },
@@ -25,6 +26,7 @@ export function AccountForm({ open, onClose, editing, onSaved }: { open: boolean
 
   const [name, setName] = useState(editing?.name ?? "");
   const [type, setType] = useState<AccountType>(editing?.type ?? "bank");
+  const [currency, setCurrency] = useState<string>(editing?.currency ?? DEFAULT_CURRENCY);
   const [initialBalance, setInitialBalance] = useState(editing ? String(editing.initialBalance) : "");
   const [ownership, setOwnership] = useState<Ownership>(editing?.ownership ?? "shared");
   const [error, setError] = useState<string | null>(null);
@@ -38,8 +40,8 @@ export function AccountForm({ open, onClose, editing, onSaved }: { open: boolean
     const bal = parseFloat(initialBalance) || 0;
     setBusy(true);
     try {
-      if (editing) await updateAccount(householdId, editing.id, { name: name.trim(), type, initialBalance: bal, ownership });
-      else await createAccount(householdId, profile.uid, { name: name.trim(), type, initialBalance: bal, ownership });
+      if (editing) await updateAccount(householdId, editing.id, { name: name.trim(), type, currency, initialBalance: bal, ownership });
+      else await createAccount(householdId, profile.uid, { name: name.trim(), type, currency, initialBalance: bal, ownership });
       toast.success(editing ? "Account updated" : "Account added");
       onSaved?.();
       onClose();
@@ -56,17 +58,28 @@ export function AccountForm({ open, onClose, editing, onSaved }: { open: boolean
         <Field label="Name" htmlFor="ac-name">
           <NeuInput id="ac-name" placeholder="e.g. City Bank Joint" value={name} onChange={(e) => setName(e.target.value)} maxLength={50} />
         </Field>
-        <Field label="Type" htmlFor="ac-type">
-          <NeuSelect id="ac-type" value={type} onChange={(e) => setType(e.target.value as AccountType)}>
-            {ACCOUNT_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </NeuSelect>
-        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Type" htmlFor="ac-type">
+            <NeuSelect id="ac-type" value={type} onChange={(e) => setType(e.target.value as AccountType)}>
+              {ACCOUNT_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </NeuSelect>
+          </Field>
+          <Field label="Currency" htmlFor="ac-cur">
+            <NeuSelect id="ac-cur" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+              {Object.values(SUPPORTED_CURRENCIES).map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.code} ({c.symbol.trim()})
+                </option>
+              ))}
+            </NeuSelect>
+          </Field>
+        </div>
         <Field
-          label={editing ? "Starting balance (৳)" : "Current balance (৳)"}
+          label={editing ? `Starting balance (${currency})` : `Current balance (${currency})`}
           htmlFor="ac-bal"
           hint={type === "credit" ? "For credit cards, enter what you owe as a positive number." : "Balances stay correct as you add transactions."}
         >

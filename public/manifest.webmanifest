@@ -9,6 +9,9 @@
   "orientation": "portrait-primary",
   "background_color": "#F3F5F7",
   "theme_color": "#F3F5F7",
+  "categories": ["finance", "productivity", "utilities"],
+  "lang": "en",
+  "dir": "ltr",
   "icons": [
     {
       "src": "/icons/icon.svg",
@@ -31,6 +34,10 @@
     {
       "name": "Transactions",
       "url": "/transactions"
+    },
+    {
+      "name": "Couple & Settlement",
+      "url": "/couple"
     },
     {
       "name": "Goals",

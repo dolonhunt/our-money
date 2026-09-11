@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowLeftRight, Copy, Pencil, Search, Trash2, X } from "lucide-react";
+import { ArrowLeftRight, Copy, Paperclip, Pencil, Search, Trash2, X } from "lucide-react";
 import type { Transaction, TransactionType } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHousehold } from "@/contexts/HouseholdContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { useToast } from "@/contexts/ToastContext";
 import { Avatar, NeuButton, NeuInput, NeuSelect, Segmented } from "@/components/ui/primitives";
 import { ConfirmDialog, Modal } from "@/components/ui/overlay";
@@ -14,6 +15,7 @@ import { TransactionForm } from "./TransactionForm";
 import { deleteTransaction } from "@/lib/firebase/transactions";
 import { dayLabel, dateLabel } from "@/lib/dates";
 import { money, signedMoney } from "@/lib/currency";
+import { ReceiptPreviewModal } from "@/components/ui/ReceiptPreviewModal";
 
 export interface TxFilters {
   search: string;
@@ -60,6 +62,8 @@ export function TransactionList({ transactions, presetFilters, presetLabel }: { 
   const toast = useToast();
 
   const [filters, setFilters] = useState<TxFilters>({ ...EMPTY_FILTERS, ...presetFilters });
+  const { currency: activeCurrency, showDual, format } = useCurrency();
+  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState<Transaction | null>(null);
@@ -226,6 +230,20 @@ export function TransactionList({ transactions, presetFilters, presetLabel }: { 
                         <span className="flex items-center gap-2">
                           <span className="truncate text-[14px] font-semibold text-ink">{t.description || cat?.name}</span>
                           {t.ownership === "personal" && <span className="neu-chip !cursor-default !py-0.5 !px-2 !text-[10px]">Personal</span>}
+                          {t.attachmentUrl && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setReceiptPreviewUrl(t.attachmentUrl);
+                              }}
+                              className="neu-pill !px-1.5 !py-0.5 text-[10px] text-teal hover:text-ink flex items-center gap-1 shrink-0"
+                              title="View attached receipt"
+                              aria-label="View receipt"
+                            >
+                              <Paperclip size={10} /> Receipt
+                            </button>
+                          )}
                         </span>
                         <span className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-sub">
                           {t.type !== "transfer" && cat && (
@@ -238,9 +256,19 @@ export function TransactionList({ transactions, presetFilters, presetLabel }: { 
                           {t.isRecurring && <span className="font-semibold text-teal"> · repeats</span>}
                         </span>
                       </span>
-                      <span className={`display-number shrink-0 text-[15px] ${t.type === "income" ? "metric-up" : t.type === "expense" ? "metric-down" : "text-sub"}`}>
-                        {signedMoney(t.type === "income" ? t.amount : -t.amount)}
-                      </span>
+                      <div className="flex flex-col items-end shrink-0">
+                        <span className={`display-number text-[15px] ${t.type === "income" ? "metric-up" : t.type === "expense" ? "metric-down" : "text-sub"}`}>
+                          {signedMoney(t.type === "income" ? t.amount : -t.amount, { currency: t.currency || "BDT" })}
+                        </span>
+                        {(showDual || (t.currency && t.currency !== "BDT")) && (
+                          <span className="text-[10.5px] font-mono text-faint">
+                            ≈ {format(t.type === "income" ? t.amount : -t.amount, {
+                              fromCurrency: t.currency || "BDT",
+                              targetCurrency: activeCurrency === "BDT" ? "USD" : "BDT",
+                            })}
+                          </span>
+                        )}
+                      </div>
                     </button>
                   );
                 })}
@@ -288,6 +316,15 @@ export function TransactionList({ transactions, presetFilters, presetLabel }: { 
         title="Delete transaction?"
         message={`This removes ${confirmingDelete?.description ?? "the transaction"} (${money(confirmingDelete?.amount ?? 0)}) for both partners. Balances and budgets update immediately.`}
         confirmLabel="Delete"
+      />
+
+      {/* Receipt preview modal */}
+      <ReceiptPreviewModal
+        open={Boolean(receiptPreviewUrl)}
+        onClose={() => setReceiptPreviewUrl(null)}
+        url={receiptPreviewUrl}
+        title="Transaction Receipt"
+        readOnly
       />
 
       {/* Detail hint for a11y */}

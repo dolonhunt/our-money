@@ -2,11 +2,12 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, Bell, LogOut, Monitor, Moon, Palette, Plus, ShieldCheck, Sun, UserRound, Wallet } from "lucide-react";
+import { Archive, ArrowRightLeft, Bell, Globe2, LogOut, Monitor, Moon, Palette, Plus, RefreshCw, ShieldCheck, Sun, UserRound, Wallet } from "lucide-react";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme, type ThemeChoice } from "@/contexts/ThemeContext";
 import { useHousehold } from "@/contexts/HouseholdContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { useToast } from "@/contexts/ToastContext";
 import type { CategoryKind, NotificationPrefs } from "@/types";
 import { updateUserProfile, sendResetEmail } from "@/lib/firebase/auth";
@@ -14,7 +15,7 @@ import { createCategory, updateCategory } from "@/lib/firebase/categories";
 import { getFirebaseApp } from "@/lib/firebase/config";
 import { PageLoader } from "@/components/ui/feedback";
 import { Avatar, FadeUp, Field, NeuButton, NeuInput, NeuSelect, SectionHead, Segmented } from "@/components/ui/primitives";
-import { DEFAULT_CURRENCY } from "@/lib/currency";
+import { DEFAULT_CURRENCY, SUPPORTED_CURRENCIES } from "@/lib/currency";
 
 export default function SettingsPage() {
   const { profile, user, logout, resetPassword } = useAuth();
@@ -23,6 +24,15 @@ export default function SettingsPage() {
   const toast = useToast();
   const router = useRouter();
   const avatarRef = useRef<HTMLInputElement>(null);
+  const {
+    currency: displayCurrency,
+    setCurrency: setDisplayCurrency,
+    showDual,
+    setShowDual,
+    rates,
+    updateRate,
+    resetRates,
+  } = useCurrency();
 
   const [name, setName] = useState(profile?.displayName ?? "");
   const [phone, setPhone] = useState(profile?.phone ?? "");
@@ -219,6 +229,86 @@ export default function SettingsPage() {
             </details>
           )}
           <p className="ml-1 text-[11.5px] text-faint">Archived categories keep their historical transactions (PRD-safe).</p>
+        </section>
+      </FadeUp>
+
+      {/* Multi-Currency & FX Engine (PRD §17) */}
+      <FadeUp delay={0.1}>
+        <section className="neu-card flex flex-col gap-5 p-6" aria-label="Currency and Exchange Rates">
+          <div className="flex items-center justify-between">
+            <h3 className="flex items-center gap-2 font-display text-[15px] font-semibold text-ink">
+              <Globe2 size={16} className="text-teal" aria-hidden /> Multi-Currency & FX Engine
+            </h3>
+            <span className="text-xs text-teal font-semibold">PRD §17</span>
+          </div>
+          <p className="text-[13px] text-sub">
+            Household primary currency is <strong className="text-ink font-semibold">BDT (৳)</strong>. All multi-currency transactions and account balances are strictly converted before summing.
+          </p>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Active Display Currency" hint="Display amounts in this currency across the app">
+              <NeuSelect
+                value={displayCurrency}
+                onChange={(e) => setDisplayCurrency(e.target.value)}
+              >
+                {Object.values(SUPPORTED_CURRENCIES).map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.flag} {c.code} — {c.name} ({c.symbol.trim()})
+                  </option>
+                ))}
+              </NeuSelect>
+            </Field>
+
+            <div className="flex flex-col justify-end">
+              <label className="neu-inset-sm flex cursor-pointer items-center justify-between p-3 rounded-2xl">
+                <div>
+                  <span className="text-[13px] font-semibold text-ink block">Dual Currency Display</span>
+                  <span className="text-[11.5px] text-sub">Show primary and converted amounts side-by-side</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={showDual}
+                  onChange={(e) => setShowDual(e.target.checked)}
+                  className="h-4 w-4 rounded text-teal focus:ring-teal cursor-pointer"
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Exchange Rates Table */}
+          <div className="flex flex-col gap-2 pt-2 border-t border-[var(--c-border)]/50">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-sub">
+                Exchange Rates (against 1 Unit in BDT ৳)
+              </span>
+              <NeuButton size="sm" variant="ghost" onClick={resetRates} className="!text-xs">
+                <RefreshCw size={12} className="mr-1 inline" /> Reset Rates
+              </NeuButton>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4 pt-1">
+              {Object.values(SUPPORTED_CURRENCIES).filter((c) => c.code !== "BDT").map((c) => (
+                <div key={c.code} className="neu-inset-sm flex items-center justify-between p-2.5 rounded-xl text-xs">
+                  <span className="font-semibold text-ink flex items-center gap-1">
+                    <span>{c.flag}</span> {c.code}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-faint font-mono">৳</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      className="w-16 bg-transparent text-right font-mono font-bold text-teal outline-none"
+                      value={rates[c.code] ?? c.rateToBDT}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        if (val > 0) updateRate(c.code, val);
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </section>
       </FadeUp>
 

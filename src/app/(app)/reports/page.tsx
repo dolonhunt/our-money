@@ -24,10 +24,11 @@ import {
 } from "lucide-react";
 import type { Ownership } from "@/types";
 import { useHousehold } from "@/contexts/HouseholdContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { useAccounts, useBills, useBudgets, useGoals, useTransactions } from "@/hooks/data";
 import { addMonths, currentMonth, monthLabel, todayISO } from "@/lib/dates";
 import { activeTransactions, budgetProgress, categoryBreakdown, monthTotals } from "@/lib/finance";
-import { money, pct } from "@/lib/currency";
+import { convertCurrency, money, pct } from "@/lib/currency";
 import {
   computeFinancialHealth,
   computeSpendingInsights,
@@ -44,10 +45,19 @@ type CouplePeriod = "this_month" | "last_month" | "three_months" | "all_time";
 
 export default function ReportsPage() {
   const { householdId, categories, members, loading } = useHousehold();
+  const { currency: activeCurrency, showDual, format } = useCurrency();
   const [month, setMonth] = useState(currentMonth());
   const [tab, setTab] = useState<Tab>("summary");
   const [couplePeriod, setCouplePeriod] = useState<CouplePeriod>("this_month");
   const [forecastDays, setForecastDays] = useState<30 | 60 | 90>(30);
+
+  const fmtDual = (amt: number) => {
+    if (!showDual && activeCurrency === "BDT") return null;
+    return `≈ ${format(amt, {
+      fromCurrency: "BDT",
+      targetCurrency: activeCurrency === "BDT" ? "USD" : "BDT",
+    })}`;
+  };
 
   const { items: transactions } = useTransactions(householdId);
   const { items: budgets } = useBudgets(householdId, month);
@@ -108,22 +118,23 @@ export default function ReportsPage() {
 
     for (const t of coupleTransactions) {
       if (t.type !== "expense") continue;
+      const amt = convertCurrency(t.amount, t.currency || "BDT", "BDT");
       if (t.ownership === "shared") {
-        totalShared += t.amount;
+        totalShared += amt;
         if (t.paidBy === "both") {
           for (const r of rows) {
-            r.totalPaid += t.amount / (rows.length || 1);
-            r.sharedPaid += t.amount / (rows.length || 1);
+            r.totalPaid += amt / (rows.length || 1);
+            r.sharedPaid += amt / (rows.length || 1);
           }
         } else if (byUid[t.paidBy]) {
-          byUid[t.paidBy].totalPaid += t.amount;
-          byUid[t.paidBy].sharedPaid += t.amount;
+          byUid[t.paidBy].totalPaid += amt;
+          byUid[t.paidBy].sharedPaid += amt;
         }
       } else {
-        totalPersonal += t.amount;
+        totalPersonal += amt;
         if (byUid[t.paidBy]) {
-          byUid[t.paidBy].totalPaid += t.amount;
-          byUid[t.paidBy].personalPaid += t.amount;
+          byUid[t.paidBy].totalPaid += amt;
+          byUid[t.paidBy].personalPaid += amt;
         }
       }
     }
@@ -155,7 +166,8 @@ export default function ReportsPage() {
     const split: Record<Ownership, number> = { shared: 0, personal: 0 };
     for (const t of activeTransactions(transactions)) {
       if (t.type !== "expense" || t.date.slice(0, 7) !== month) continue;
-      split[t.ownership] += t.amount;
+      const amt = convertCurrency(t.amount, t.currency || "BDT", "BDT");
+      split[t.ownership] += amt;
     }
     return split;
   }, [transactions, month]);
@@ -228,23 +240,30 @@ export default function ReportsPage() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Stat
               label="Income"
-              value={money(totals.income)}
-              sub={`${totals.income - prevTotals.income >= 0 ? "+" : ""}${money(
+              value={format(totals.income)}
+              secondary={fmtDual(totals.income) ?? undefined}
+              sub={`${totals.income - prevTotals.income >= 0 ? "+" : ""}${format(
                 totals.income - prevTotals.income
               )} vs last month`}
             />
             <Stat
               label="Expenses"
-              value={money(totals.expense)}
-              sub={`${totals.expense - prevTotals.expense >= 0 ? "+" : ""}${money(
+              value={format(totals.expense)}
+              secondary={fmtDual(totals.expense) ?? undefined}
+              sub={`${totals.expense - prevTotals.expense >= 0 ? "+" : ""}${format(
                 totals.expense - prevTotals.expense
               )} vs last month`}
             />
-            <Stat label="Net Savings" value={money(totals.net)} sub={`Savings Rate ${pct(totals.savingsRate * 100, 1)}`} />
+            <Stat
+              label="Net Savings"
+              value={format(totals.net)}
+              secondary={fmtDual(totals.net) ?? undefined}
+              sub={`Savings Rate ${pct(totals.savingsRate * 100, 1)}`}
+            />
             <Stat
               label="Top Category"
               value={breakdown[0] ? categories.find((c) => c.id === breakdown[0].categoryId)?.name ?? "—" : "—"}
-              sub={breakdown[0] ? money(breakdown[0].amount) : "No spending"}
+              sub={breakdown[0] ? format(breakdown[0].amount) : "No spending"}
             />
           </div>
 
@@ -272,7 +291,7 @@ export default function ReportsPage() {
                       <div className="mb-1 flex justify-between text-[13px]">
                         <span className="font-semibold text-ink">{cat?.name ?? "Other"}</span>
                         <span className="text-sub">
-                          {money(s.amount)} · {pct(s.share * 100, 0)} · {s.count}×
+                          {format(s.amount)} · {pct(s.share * 100, 0)} · {s.count}×
                         </span>
                       </div>
                       <ProgressBar value={s.share} />
@@ -311,7 +330,7 @@ export default function ReportsPage() {
                           {delta.toFixed(0)}%
                         </span>
                       )}
-                      <span className="w-[84px] text-right font-display text-[13.5px] font-semibold text-ink">{money(s.amount)}</span>
+                      <span className="w-[84px] text-right font-display text-[13.5px] font-semibold text-ink">{format(s.amount)}</span>
                     </li>
                   );
                 })}
@@ -345,7 +364,12 @@ export default function ReportsPage() {
                   <Users2 size={18} className="text-teal" aria-hidden /> Shared Expense Settlement & Contribution
                 </h3>
                 <p className="mt-0.5 text-[12.5px] text-sub">
-                  Total shared expenses: <strong className="text-ink">{money(coupleAnalysis.totalShared)}</strong>
+                  Total shared expenses: <strong className="text-ink">{format(coupleAnalysis.totalShared)}</strong>
+                  {fmtDual(coupleAnalysis.totalShared) && (
+                    <span className="ml-1.5 font-mono text-[11px] text-faint">
+                      ({fmtDual(coupleAnalysis.totalShared)})
+                    </span>
+                  )}
                 </p>
               </div>
 
@@ -353,8 +377,8 @@ export default function ReportsPage() {
                 <div className="neu-inset-sm flex items-center gap-2 rounded-xl px-3.5 py-2">
                   <Heart size={15} className="text-teal" />
                   <span className="text-[12.5px] text-ink">
-                    <strong>{coupleAnalysis.higherPayer}</strong> paid {money(coupleAnalysis.diff)} more. Settle up:{" "}
-                    <span className="text-teal font-bold">{money(coupleAnalysis.settleAmount)}</span>
+                    <strong>{coupleAnalysis.higherPayer}</strong> paid {format(coupleAnalysis.diff)} more. Settle up:{" "}
+                    <span className="text-teal font-bold">{format(coupleAnalysis.settleAmount)}</span>
                   </span>
                 </div>
               )}
@@ -369,14 +393,14 @@ export default function ReportsPage() {
                       <Avatar name={r.member.displayName} photoURL={r.member.photoURL} size={44} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[15px] font-semibold text-ink">{r.member.displayName}</p>
-                        <p className="text-[12px] text-sub">Paid for Shared: {money(r.sharedPaid)}</p>
+                        <p className="text-[12px] text-sub">Paid for Shared: {format(r.sharedPaid)}</p>
                       </div>
-                      <span className="display-number text-[18px] text-ink">{money(r.totalPaid)}</span>
+                      <span className="display-number text-[18px] text-ink">{format(r.totalPaid)}</span>
                     </div>
 
                     <ProgressBar value={r.sharedPaid / totalShared} />
                     <div className="flex justify-between text-[12px] text-sub">
-                      <span>Personal spend: {money(r.personalPaid)}</span>
+                      <span>Personal spend: {format(r.personalPaid)}</span>
                       <span className="font-semibold text-ink">
                         {Math.round((r.sharedPaid / totalShared) * 100)}% of shared
                       </span>
@@ -393,12 +417,14 @@ export default function ReportsPage() {
               <SplitBar
                 label="Shared spending"
                 value={coupleAnalysis.totalShared}
+                formattedValue={format(coupleAnalysis.totalShared)}
                 total={coupleAnalysis.totalShared + coupleAnalysis.totalPersonal}
                 tint="teal"
               />
               <SplitBar
                 label="Personal spending"
                 value={coupleAnalysis.totalPersonal}
+                formattedValue={format(coupleAnalysis.totalPersonal)}
                 total={coupleAnalysis.totalShared + coupleAnalysis.totalPersonal}
                 tint="peach"
               />
@@ -436,10 +462,10 @@ export default function ReportsPage() {
                     {budgetRows.map((r) => (
                       <tr key={r.budget.id}>
                         <td className="py-2.5 pl-1 font-semibold text-ink">{r.name}</td>
-                        <td className="py-2.5 text-right text-sub">{money(r.budget.amount)}</td>
-                        <td className="py-2.5 text-right text-ink">{money(r.spent)}</td>
+                        <td className="py-2.5 text-right text-sub">{format(r.budget.amount)}</td>
+                        <td className="py-2.5 text-right text-ink">{format(r.spent)}</td>
                         <td className={`py-2.5 text-right font-semibold ${r.remaining < 0 ? "text-danger" : "text-sub"}`}>
-                          {money(r.remaining)}
+                          {format(r.remaining)}
                         </td>
                         <td className="py-2.5 pr-1 text-right">
                           <span
@@ -476,12 +502,12 @@ export default function ReportsPage() {
             </div>
             <Segmented
               ariaLabel="Forecast Horizon"
-              value={forecastDays}
-              onChange={setForecastDays}
+              value={String(forecastDays)}
+              onChange={(v) => setForecastDays(Number(v) as 30 | 60 | 90)}
               options={[
-                { value: 30, label: "30 Days" },
-                { value: 60, label: "60 Days" },
-                { value: 90, label: "90 Days" },
+                { value: "30", label: "30 Days" },
+                { value: "60", label: "60 Days" },
+                { value: "90", label: "90 Days" },
               ]}
             />
           </div>
@@ -489,14 +515,14 @@ export default function ReportsPage() {
           <div className="grid gap-4 sm:grid-cols-4">
             <div className="neu-card-sm flex flex-col gap-1 p-4">
               <span className="text-[10.5px] font-bold uppercase tracking-wider text-faint">Current Balance</span>
-              <span className="display-number text-[20px] text-ink">{money(forecast.currentBalance)}</span>
+              <span className="display-number text-[20px] text-ink">{format(forecast.currentBalance)}</span>
               <span className="text-[11px] text-sub">Today&apos;s combined funds</span>
             </div>
 
             <div className="neu-card-sm flex flex-col gap-1 p-4">
               <span className="text-[10.5px] font-bold uppercase tracking-wider text-faint">Projected Balance</span>
               <span className={`display-number text-[20px] ${forecast.projectedBalance >= 0 ? "text-teal" : "text-danger"}`}>
-                {money(forecast.projectedBalance)}
+                {format(forecast.projectedBalance)}
               </span>
               <span className="text-[11px] text-sub">At end of {forecast.horizonDays} days</span>
             </div>
@@ -504,7 +530,7 @@ export default function ReportsPage() {
             <div className="neu-card-sm flex flex-col gap-1 p-4">
               <span className="text-[10.5px] font-bold uppercase tracking-wider text-faint">Lowest Projected Point</span>
               <span className={`display-number text-[20px] ${forecast.lowestBalance < 0 ? "text-danger" : "text-ink"}`}>
-                {money(forecast.lowestBalance)}
+                {format(forecast.lowestBalance)}
               </span>
               <span className="text-[11px] text-sub">Occurring around {forecast.lowestDate}</span>
             </div>
@@ -544,9 +570,9 @@ export default function ReportsPage() {
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="dayLabel" stroke="var(--c-text-faint)" fontSize={11} tickLine={false} />
-                  <YAxis stroke="var(--c-text-faint)" fontSize={11} tickLine={false} tickFormatter={(v) => `৳${v / 1000}k`} />
+                  <YAxis stroke="var(--c-text-faint)" fontSize={11} tickLine={false} tickFormatter={(v) => format(v, { compact: true })} />
                   <Tooltip
-                    formatter={(val: unknown) => [money(Number(val) || 0), "Projected Balance"]}
+                    formatter={(val: unknown) => [format(Number(val) || 0), "Projected Balance"]}
                     contentStyle={{
                       background: "var(--c-surface)",
                       border: "1px solid var(--c-border)",
@@ -666,12 +692,25 @@ export default function ReportsPage() {
   );
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
+function Stat({
+  label,
+  value,
+  sub,
+  secondary,
+}: {
+  label: string;
+  value: React.ReactNode;
+  sub?: React.ReactNode;
+  secondary?: string;
+}) {
   return (
     <div className="neu-card-sm flex flex-col gap-1 p-5">
       <p className="text-[10.5px] font-bold uppercase tracking-wider text-faint">{label}</p>
-      <p className="display-number text-[24px] text-ink">{value}</p>
-      <p className="text-[11.5px] text-sub">{sub}</p>
+      <div className="flex flex-wrap items-baseline gap-2">
+        <p className="display-number text-[24px] text-ink">{value}</p>
+        {secondary && <span className="text-[11px] font-mono text-faint">{secondary}</span>}
+      </div>
+      {sub && <p className="text-[11.5px] text-sub">{sub}</p>}
     </div>
   );
 }
@@ -681,11 +720,13 @@ function SplitBar({
   value,
   total,
   tint,
+  formattedValue,
 }: {
   label: string;
   value: number;
   total: number;
   tint: "teal" | "peach";
+  formattedValue?: string;
 }) {
   const share = total > 0 ? value / total : 0;
   return (
@@ -693,7 +734,7 @@ function SplitBar({
       <div className="flex justify-between text-[13px]">
         <span className="font-semibold text-ink">{label}</span>
         <span className="text-sub">
-          {money(value)} · {pct(share * 100, 0)}
+          {formattedValue ?? money(value)} · {pct(share * 100, 0)}
         </span>
       </div>
       <ProgressBar value={share} status={tint === "teal" ? "healthy" : "approaching"} />

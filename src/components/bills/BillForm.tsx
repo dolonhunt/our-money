@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import clsx from "clsx";
+import { Paperclip, Trash2 } from "lucide-react";
 import type { Bill, Ownership, Recurring } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHousehold } from "@/contexts/HouseholdContext";
@@ -9,6 +11,8 @@ import { Field, NeuButton, NeuInput, NeuSelect, Segmented } from "@/components/u
 import { Modal } from "@/components/ui/overlay";
 import { saveBill } from "@/lib/firebase/bills";
 import { addDays, todayISO } from "@/lib/dates";
+import { uploadFile } from "@/lib/supabase";
+import { ReceiptPreviewModal } from "@/components/ui/ReceiptPreviewModal";
 
 export function BillForm({ open, onClose, editing, onSaved }: { open: boolean; onClose: () => void; editing?: Bill | null; onSaved?: () => void }) {
   const { householdId, categories, accounts } = useHousehold();
@@ -24,8 +28,28 @@ export function BillForm({ open, onClose, editing, onSaved }: { open: boolean; o
   const [isSubscription, setIsSubscription] = useState<boolean>(editing?.isSubscription ?? false);
   const [reminderDays, setReminderDays] = useState(String(editing?.reminderDays ?? 3));
   const [ownership, setOwnership] = useState<Ownership>(editing?.ownership ?? "shared");
+  const [attachmentUrl, setAttachmentUrl] = useState<string | null>(editing?.attachmentUrl ?? null);
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  async function handleAttachment(file: File) {
+    if (!householdId || !profile) return;
+    setUploading(true);
+    try {
+      const url = await uploadFile(
+        `households/${householdId}/bills/${profile.uid}/${Date.now()}_${file.name.replace(/[^\w.\-]/g, "_")}`,
+        file
+      );
+      setAttachmentUrl(url);
+      toast.success("Bill receipt attached");
+    } catch {
+      toast.error("Couldn't upload attachment. Check network and storage settings.");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -50,6 +74,7 @@ export function BillForm({ open, onClose, editing, onSaved }: { open: boolean; o
           reminderDays: Math.max(1, parseInt(reminderDays) || 3),
           ownership,
           isSubscription,
+          attachmentUrl,
         },
         editing?.id
       );
@@ -99,11 +124,11 @@ export function BillForm({ open, onClose, editing, onSaved }: { open: boolean; o
             </NeuSelect>
           </Field>
         </div>
-        <Field label="Repeats">
+        <Field label="Repeats" hint="Generates the next instance when paid.">
           <Segmented
-            ariaLabel="Bill recurrence"
+            ariaLabel="Recurrence frequency"
             value={recurring}
-            onChange={setRecurring}
+            onChange={(v) => setRecurring(v as Recurring)}
             options={[
               { value: "none", label: "One-time" },
               { value: "monthly", label: "Monthly" },
@@ -132,11 +157,59 @@ export function BillForm({ open, onClose, editing, onSaved }: { open: boolean; o
             This is a recurring subscription (Streaming, Software, Internet, etc.)
           </label>
         </div>
+
+        {/* Receipt attachment */}
+        <div className="flex items-center justify-between gap-3 pt-1">
+          {attachmentUrl ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setReceiptModalOpen(true)}
+                className="neu-btn flex items-center gap-1.5 !rounded-xl px-3 py-2 text-xs text-teal hover:text-ink font-semibold"
+              >
+                <Paperclip size={13} /> View Attached Bill / Receipt
+              </button>
+              <button
+                type="button"
+                onClick={() => setAttachmentUrl(null)}
+                className="neu-btn !rounded-xl !p-2 text-xs text-danger"
+                title="Remove attached receipt"
+                aria-label="Remove receipt"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ) : (
+            <label className={clsx("neu-btn cursor-pointer items-center gap-2 !rounded-xl px-3.5 py-2 text-[13px]", uploading && "pointer-events-none")}>
+              <Paperclip size={15} aria-hidden />
+              {uploading ? "Uploading…" : "Attach bill document / receipt"}
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleAttachment(f);
+                  e.currentTarget.value = "";
+                }}
+              />
+            </label>
+          )}
+        </div>
+
         {error && <p className="text-[13px] font-medium text-danger" role="alert">{error}</p>}
         <NeuButton type="submit" variant="primary" size="lg" loading={busy} className="w-full">
           {editing ? "Save changes" : "Add bill"}
         </NeuButton>
       </form>
+
+      <ReceiptPreviewModal
+        open={receiptModalOpen}
+        onClose={() => setReceiptModalOpen(false)}
+        url={attachmentUrl}
+        title="Bill Document / Receipt"
+        onDelete={() => setAttachmentUrl(null)}
+      />
     </Modal>
   );
 }

@@ -38,12 +38,21 @@ export interface HouseholdMember {
   joinedAt: Timestamp;
 }
 
+export type SplitMode = "equal_50_50" | "income_proportional" | "custom_ratio";
+
+export interface HouseholdSplitRule {
+  mode: SplitMode;
+  customRatio?: Record<string, number>; // e.g. { [uid]: 60, [uid2]: 40 }
+  partnerIncomes?: Record<string, number>; // optional declared monthly incomes for proportional split
+}
+
 export interface Household {
   id: string;
   name: string;
   currency: string;
   inviteCode: string;
   ownerUid: string;
+  splitRule?: HouseholdSplitRule;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -178,6 +187,7 @@ export interface Bill {
   paidTransactionId: string | null;
   ownership: Ownership;
   isSubscription?: boolean;
+  attachmentUrl?: string | null;
   createdBy: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;

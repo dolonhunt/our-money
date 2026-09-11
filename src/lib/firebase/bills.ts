@@ -30,6 +30,7 @@ export interface BillInput {
   reminderDays: number;
   ownership: Ownership;
   isSubscription?: boolean;
+  attachmentUrl?: string | null;
 }
 
 export async function saveBill(householdId: string, actorUid: string, input: BillInput, existingId?: string): Promise<string> {
@@ -48,6 +49,7 @@ export async function saveBill(householdId: string, actorUid: string, input: Bil
     paidTransactionId: null,
     ownership: input.ownership,
     isSubscription: Boolean(input.isSubscription),
+    attachmentUrl: input.attachmentUrl ?? null,
     createdBy: actorUid,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -110,7 +112,7 @@ export async function payBill(
     recurringId: null,
     recurrence: null,
     nextDueDate: null,
-    attachmentUrl: null,
+    attachmentUrl: bill.attachmentUrl ?? null,
     tags: ["bill"],
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

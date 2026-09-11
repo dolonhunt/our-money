@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { money, pct, signedMoney } from "@/lib/currency";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { Avatar } from "@/components/ui/primitives";
 import type { HouseholdMember } from "@/types";
 
@@ -27,6 +28,8 @@ export function HeroOurMoney({
   members?: HouseholdMember[];
   children?: ReactNode;
 }) {
+  const { currency, showDual, format } = useCurrency();
+
   return (
     <section className="relative overflow-hidden rounded-[26px] p-6 sm:p-8 bg-gradient-to-br from-[#1B4332] to-[#2D6A4F] text-white shadow-neuPop" aria-label="Our money overview">
       <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full border-[26px] border-white/5" aria-hidden />
@@ -51,6 +54,11 @@ export function HeroOurMoney({
       >
         {money(balance)}
       </motion.p>
+      {showDual && (
+        <p className="text-xs font-mono text-white/75 -mt-1 mb-1">
+          ≈ {format(balance, { fromCurrency: "BDT", targetCurrency: currency === "BDT" ? "USD" : currency })}
+        </p>
+      )}
       <p className="mt-1 text-[13px] font-medium text-white/80">Available balance</p>
 
       <div className="mt-6 flex flex-wrap items-center gap-2.5">

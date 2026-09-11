@@ -19,6 +19,7 @@ export interface AccountInput {
   name: string;
   type: AccountType;
   initialBalance: number;
+  currency?: string;
   ownership: Ownership;
 }
 
@@ -28,7 +29,7 @@ export async function createAccount(householdId: string, actorUid: string, input
     name: input.name.trim(),
     type: input.type,
     initialBalance: Math.round(input.initialBalance * 100) / 100,
-    currency: "BDT",
+    currency: (input.currency || "BDT").toUpperCase(),
     ownership: input.ownership,
     archived: false,
     createdBy: actorUid,
@@ -41,7 +42,7 @@ export async function createAccount(householdId: string, actorUid: string, input
 export async function updateAccount(
   householdId: string,
   accountId: string,
-  patch: Partial<Pick<Account, "name" | "type" | "initialBalance" | "ownership" | "archived">>
+  patch: Partial<Pick<Account, "name" | "type" | "initialBalance" | "currency" | "ownership" | "archived">>
 ): Promise<void> {
   await updateDoc(doc(getDb(), "households", householdId, "accounts", accountId), { ...patch, updatedAt: serverTimestamp() });
 }

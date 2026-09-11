@@ -13,7 +13,7 @@ import {
   updateDoc,
   writeBatch,
 } from "firebase/firestore";
-import type { Household, HouseholdMember, UserProfile } from "@/types";
+import type { Household, HouseholdMember, HouseholdSplitRule, UserProfile } from "@/types";
 import { randomCode } from "@/lib/ids";
 import { DEFAULT_CATEGORIES } from "./categories";
 import { logActivity } from "./activity";
@@ -189,6 +189,7 @@ export function subscribeMembers(
 export interface HouseholdSettingsPatch {
   name?: string;
   currency?: string;
+  splitRule?: HouseholdSplitRule;
 }
 
 export async function updateHouseholdSettings(householdId: string, patch: HouseholdSettingsPatch): Promise<void> {

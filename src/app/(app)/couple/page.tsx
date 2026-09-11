@@ -13,6 +13,7 @@ import { ConfirmDialog } from "@/components/ui/overlay";
 import { leaveHousehold, regenerateInviteCode, removeMember, transferOwnership, updateHouseholdSettings } from "@/lib/firebase/households";
 import { useRouter } from "next/navigation";
 import { DEFAULT_CURRENCY } from "@/lib/currency";
+import { CoupleBalanceCard } from "@/components/couple/CoupleBalanceCard";
 
 export default function CouplePage() {
   const { profile } = useAuth();
@@ -172,6 +173,13 @@ export default function CouplePage() {
           </div>
         </div>
       </FadeUp>
+
+      {/* Couple Balance & Settlement (PRD §14) */}
+      {!solo && (
+        <FadeUp delay={0.06}>
+          <CoupleBalanceCard />
+        </FadeUp>
+      )}
 
       {/* Invite */}
       {solo && (

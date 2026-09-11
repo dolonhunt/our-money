@@ -6,6 +6,7 @@ import type { Account, AccountType } from "@/types";
 import { useHousehold } from "@/contexts/HouseholdContext";
 import { useAccounts, useTransactions } from "@/hooks/data";
 import { useQuickAdd } from "@/contexts/QuickAddContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { accountBalance } from "@/lib/finance";
 import { money } from "@/lib/currency";
 import { EmptyState, PageLoader } from "@/components/ui/feedback";
@@ -26,20 +27,25 @@ export default function AccountsPage() {
   const { items: accounts } = useAccounts(householdId);
   const { items: transactions } = useTransactions(householdId);
   const { open } = useQuickAdd();
+  const { currency, showDual, format, convert } = useCurrency();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
 
   if (loading) return <PageLoader label="Loading accounts…" />;
 
-  const total = accounts.reduce((s, a) => s + accountBalance(a, transactions), 0);
+  // PRD §17: Do not sum different currencies without conversion
+  const totalInBDT = accounts.reduce(
+    (s, a) => s + convert(accountBalance(a, transactions), a.currency || "BDT", "BDT"),
+    0
+  );
 
   return (
     <div className="flex flex-col gap-6">
       <FadeUp>
         <SectionHead
           title="Accounts"
-          subtitle={accounts.length ? `${accounts.length} accounts · ${money(total)} combined` : "Cash, banks, wallets & cards"}
+          subtitle={accounts.length ? `${accounts.length} accounts · ${money(totalInBDT)} combined` : "Cash, banks, wallets & cards"}
           action={
             <div className="flex gap-2">
               <NeuButton onClick={() => open("transfer")}>Transfer</NeuButton>
@@ -101,10 +107,17 @@ export default function AccountsPage() {
                   </div>
                   <div>
                     <p className="font-display text-[15px] font-semibold text-ink">{a.name}</p>
-                    <p className={`display-number mt-1 text-[26px] ${balance < 0 ? "text-orange" : "text-ink"}`}>{money(balance)}</p>
+                    <p className={`display-number mt-1 text-[26px] ${balance < 0 ? "text-orange" : "text-ink"}`}>
+                      {money(balance, { currency: a.currency || "BDT" })}
+                    </p>
+                    {(showDual || (a.currency && a.currency !== "BDT")) && (
+                      <p className="text-[11px] font-mono text-faint">
+                        ≈ {format(balance, { fromCurrency: a.currency || "BDT", targetCurrency: "BDT" })}
+                      </p>
+                    )}
                   </div>
                   <p className="text-[11px] text-faint">
-                    Started at {money(a.initialBalance)} · updated live from activity
+                    Started at {money(a.initialBalance, { currency: a.currency || "BDT" })} · updated live
                   </p>
                 </button>
               );

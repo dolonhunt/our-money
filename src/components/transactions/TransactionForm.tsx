@@ -2,18 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
-import { ArrowLeftRight, Banknote, Paperclip, TrendingDown } from "lucide-react";
+import { ArrowLeftRight, Banknote, Paperclip, Trash2, TrendingDown } from "lucide-react";
 import type { Ownership, PaidBy, RecurrenceFrequency, Transaction, TransactionType } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHousehold } from "@/contexts/HouseholdContext";
 import { useToast } from "@/contexts/ToastContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { Modal } from "@/components/ui/overlay";
 import { Field, NeuButton, NeuInput, NeuSelect, NeuTextarea, Segmented } from "@/components/ui/primitives";
 import { DynamicIcon } from "@/components/ui/icon";
 import { createTransaction, updateTransaction, type TransactionInput } from "@/lib/firebase/transactions";
 import { uploadFile } from "@/lib/supabase";
 import { todayISO } from "@/lib/dates";
-import { money } from "@/lib/currency";
+import { money, SUPPORTED_CURRENCIES } from "@/lib/currency";
+import { ReceiptPreviewModal } from "@/components/ui/ReceiptPreviewModal";
 
 const RECURRENCES: { value: RecurrenceFrequency | "none"; label: string }[] = [
   { value: "none", label: "One-time" },
@@ -34,9 +36,11 @@ export function TransactionForm({ onClose, onSaved, initialType = "expense", edi
   const { profile } = useAuth();
   const { householdId, household, categories, accounts, members, memberUids } = useHousehold();
   const toast = useToast();
+  const { currency: activeDisplayCurrency, convert } = useCurrency();
 
   const [type, setType] = useState<TransactionType>(editing?.type ?? initialType);
   const [amount, setAmount] = useState(editing ? String(editing.amount) : "");
+  const [txCurrency, setTxCurrency] = useState<string>(editing?.currency ?? activeDisplayCurrency ?? "BDT");
   const [date, setDate] = useState(editing?.date ?? todayISO());
   const [categoryId, setCategoryId] = useState(editing?.categoryId ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
@@ -48,6 +52,7 @@ export function TransactionForm({ onClose, onSaved, initialType = "expense", edi
   const [ownership, setOwnership] = useState<Ownership>(editing?.ownership ?? "shared");
   const [recurrence, setRecurrence] = useState<RecurrenceFrequency | "none">("none");
   const [attachmentUrl, setAttachmentUrl] = useState<string | null>(editing?.attachmentUrl ?? null);
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -105,6 +110,7 @@ export function TransactionForm({ onClose, onSaved, initialType = "expense", edi
       const input: TransactionInput = {
         type,
         amount: parseFloat(amount),
+        currency: txCurrency,
         categoryId: type === "transfer" ? "transfer" : categoryId,
         description: description.trim(),
         notes,
@@ -121,6 +127,7 @@ export function TransactionForm({ onClose, onSaved, initialType = "expense", edi
       if (editing?.id) {
         await updateTransaction(householdId, editing.id, profile.uid, memberUids, {
           amount: input.amount,
+          currency: input.currency,
           categoryId: input.categoryId,
           description: input.description,
           notes: input.notes,
@@ -169,25 +176,36 @@ export function TransactionForm({ onClose, onSaved, initialType = "expense", edi
 
       {/* Big amount entry — fastest path (PRD §52) */}
       <div className="flex flex-col items-center gap-1.5">
-        <div className="neu-inset flex w-full items-center justify-center gap-2 px-4 py-5">
-          <span className="font-display text-2xl font-semibold text-sub">৳</span>
+        <div className="neu-inset flex w-full items-center justify-center gap-3 px-4 py-4 rounded-2xl">
+          <select
+            value={txCurrency}
+            onChange={(e) => setTxCurrency(e.target.value)}
+            className="neu-pill !py-1 !px-2.5 text-sm font-bold text-teal bg-transparent cursor-pointer border border-[var(--c-border)]"
+            aria-label="Transaction currency"
+          >
+            {Object.values(SUPPORTED_CURRENCIES).map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.code} {c.symbol.trim()}
+              </option>
+            ))}
+          </select>
           <input
             inputMode="decimal"
             autoFocus
             placeholder="0"
             value={amount}
             onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-            className="display-number w-full max-w-[240px] bg-transparent text-center text-4xl text-ink outline-none placeholder:text-faint"
+            className="display-number w-full max-w-[200px] bg-transparent text-center text-4xl text-ink outline-none placeholder:text-faint"
             aria-label="Amount"
             aria-invalid={Boolean(errors.amount)}
           />
         </div>
-        {errors.amount && <p className="text-xs font-medium text-danger">{errors.amount}</p>}
-        {attachmentUrl && (
-          <a href={attachmentUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold text-teal underline underline-offset-2">
-            View attached receipt
-          </a>
+        {txCurrency !== "BDT" && parseFloat(amount) > 0 && (
+          <p className="text-xs font-mono text-faint">
+            ≈ ৳{convert(parseFloat(amount), txCurrency, "BDT").toFixed(2)} BDT (Household Base)
+          </p>
         )}
+        {errors.amount && <p className="text-xs font-medium text-danger">{errors.amount}</p>}
       </div>
 
       {type !== "transfer" && (
@@ -318,24 +336,53 @@ export function TransactionForm({ onClose, onSaved, initialType = "expense", edi
       </Field>
 
       <div className="flex items-center justify-between gap-3">
-        <label className={clsx("neu-btn cursor-pointer items-center gap-2 !rounded-xl px-3.5 py-2 text-[13px]", uploading && "pointer-events-none")}>
-          <Paperclip size={15} aria-hidden />
-          {uploading ? "Uploading…" : "Attach receipt"}
-          <input
-            type="file"
-            accept="image/*,.pdf"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleAttachment(f);
-              e.currentTarget.value = "";
-            }}
-          />
-        </label>
+        {attachmentUrl ? (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setReceiptModalOpen(true)}
+              className="neu-btn flex items-center gap-1.5 !rounded-xl px-3 py-2 text-xs text-teal hover:text-ink font-semibold"
+            >
+              <Paperclip size={13} /> View Receipt
+            </button>
+            <button
+              type="button"
+              onClick={() => setAttachmentUrl(null)}
+              className="neu-btn !rounded-xl !p-2 text-xs text-danger"
+              title="Remove attached receipt"
+              aria-label="Remove receipt"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ) : (
+          <label className={clsx("neu-btn cursor-pointer items-center gap-2 !rounded-xl px-3.5 py-2 text-[13px]", uploading && "pointer-events-none")}>
+            <Paperclip size={15} aria-hidden />
+            {uploading ? "Uploading…" : "Attach receipt"}
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleAttachment(f);
+                e.currentTarget.value = "";
+              }}
+            />
+          </label>
+        )}
         <NeuButton type="submit" variant="primary" loading={submitting} size="lg">
-          {isEdit ? "Save changes" : `Add ${money(parseFloat(amount) || 0)}`}
+          {isEdit ? "Save changes" : `Add ${money(parseFloat(amount) || 0, { currency: txCurrency })}`}
         </NeuButton>
       </div>
+
+      <ReceiptPreviewModal
+        open={receiptModalOpen}
+        onClose={() => setReceiptModalOpen(false)}
+        url={attachmentUrl}
+        title="Attached Receipt"
+        onDelete={() => setAttachmentUrl(null)}
+      />
     </form>
   );
 }

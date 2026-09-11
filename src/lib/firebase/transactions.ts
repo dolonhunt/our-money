@@ -24,6 +24,7 @@ import { getDb } from "./firestore";
 export interface TransactionInput {
   type: TransactionType;
   amount: number;
+  currency?: string;
   categoryId: string;
   description: string;
   notes?: string;
@@ -91,7 +92,7 @@ export async function createTransaction(
     householdId,
     type: input.type,
     amount: Math.round(input.amount * 100) / 100,
-    currency: "BDT",
+    currency: (input.currency || "BDT").toUpperCase(),
     categoryId: input.categoryId,
     description: input.description.trim(),
     notes: input.notes?.trim() ?? "",

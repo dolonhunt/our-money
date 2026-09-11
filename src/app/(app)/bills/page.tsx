@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, Clock, Pencil, Plus, Radio, Receipt, Sparkles, Trash2, Zap } from "lucide-react";
+import { CheckCircle2, Clock, Paperclip, Pencil, Plus, Radio, Receipt, Sparkles, Trash2, Zap } from "lucide-react";
 import type { Bill } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHousehold } from "@/contexts/HouseholdContext";
@@ -15,6 +15,7 @@ import { EmptyState, PageLoader } from "@/components/ui/feedback";
 import { FadeUp, NeuButton, SectionHead, Segmented } from "@/components/ui/primitives";
 import { ConfirmDialog } from "@/components/ui/overlay";
 import { BillForm } from "@/components/bills/BillForm";
+import { ReceiptPreviewModal } from "@/components/ui/ReceiptPreviewModal";
 
 const STATUS_STYLE: Record<BillStatus, { chip: string; label: string }> = {
   upcoming: { chip: "!text-teal", label: "Upcoming" },
@@ -37,6 +38,7 @@ export default function BillsPage() {
   const [confirming, setConfirming] = useState<Bill | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [paying, setPaying] = useState<string | null>(null);
+  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string | null>(null);
 
   const subMetrics = useMemo(() => computeSubscriptionMetrics(bills), [bills]);
 
@@ -266,6 +268,17 @@ export default function BillsPage() {
                             {b.isSubscription && (
                               <span className="neu-chip !cursor-default !py-0.5 !px-2 !text-[10px] !text-teal">Sub</span>
                             )}
+                            {b.attachmentUrl && (
+                              <button
+                                type="button"
+                                onClick={() => setReceiptPreviewUrl(b.attachmentUrl!)}
+                                className="neu-pill !px-1.5 !py-0.5 text-[10px] text-teal hover:text-ink flex items-center gap-1"
+                                title="View attached receipt"
+                                aria-label="View receipt"
+                              >
+                                <Paperclip size={10} /> Receipt
+                              </button>
+                            )}
                           </div>
                           <p className="mt-0.5 text-[12px] text-sub">
                             Due {dateLabel(b.dueDate)} ·{" "}
@@ -326,6 +339,17 @@ export default function BillsPage() {
                             ? dateLabel(new Date(b.paidAt.toDate?.() ?? new Date()).toISOString().slice(0, 10))
                             : b.dueDate}
                         </span>
+                        {b.attachmentUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setReceiptPreviewUrl(b.attachmentUrl!)}
+                            className="text-teal hover:text-ink p-1 shrink-0"
+                            title="View receipt"
+                            aria-label="View receipt"
+                          >
+                            <Paperclip size={13} />
+                          </button>
+                        )}
                         <span className="text-[12.5px] font-medium text-sub">{money(b.amount)}</span>
                         <NeuButton
                           variant="ghost"
@@ -357,6 +381,14 @@ export default function BillsPage() {
         title="Delete bill?"
         message={`"${confirming?.name}" will be removed. Already-recorded payments stay in transactions.`}
         confirmLabel="Delete"
+      />
+
+      <ReceiptPreviewModal
+        open={Boolean(receiptPreviewUrl)}
+        onClose={() => setReceiptPreviewUrl(null)}
+        url={receiptPreviewUrl}
+        title="Bill Receipt / Document"
+        readOnly
       />
     </div>
   );

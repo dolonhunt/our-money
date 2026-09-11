@@ -6,7 +6,9 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ToastProvider } from "@/contexts/ToastContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { HouseholdProvider } from "@/contexts/HouseholdContext";
+import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import PWARegister from "@/components/layout/PWARegister";
+import { OfflineBanner } from "@/components/layout/OfflineBanner";
 
 const display = Playfair_Display({
   subsets: ["latin"],
@@ -53,10 +55,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <ThemeProvider>
           <AuthProvider>
             <HouseholdProvider>
-              <ToastProvider>
-                {children}
-                <PWARegister />
-              </ToastProvider>
+              <CurrencyProvider>
+                <ToastProvider>
+                  {children}
+                  <PWARegister />
+                  <OfflineBanner />
+                </ToastProvider>
+              </CurrencyProvider>
             </HouseholdProvider>
           </AuthProvider>
         </ThemeProvider>
