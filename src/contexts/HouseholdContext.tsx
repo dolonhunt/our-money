@@ -21,6 +21,8 @@ interface HouseholdState {
   loading: boolean;
   setupState: SetupState;
   error: Error | null;
+  dataLoading?: boolean;
+  dataError?: Error | null;
   retry: () => void;
 }
 
@@ -33,19 +35,27 @@ export function useHousehold(): HouseholdState {
 }
 
 export function HouseholdProvider({ children }: { children: ReactNode }) {
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, authLoading, profileLoading, profileStatus, profileError } = useAuth();
   const householdId = profile?.householdId ?? null;
   const [household, setHousehold] = useState<Household | null>(null);
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+
+  // Setup resolution state (household doc + active membership)
   const [loadedHouseholdId, setLoadedHouseholdId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [setupError, setSetupError] = useState<Error | null>(null);
+
+  // Application data state (categories + accounts)
+  const [dataLoading, setDataLoading] = useState(false);
+  const [dataError, setDataError] = useState<Error | null>(null);
+
   const [retryNonce, setRetryNonce] = useState(0);
 
   const retry = () => {
-    setError(null);
+    setSetupError(null);
+    setDataError(null);
     setRetryNonce((n) => n + 1);
   };
 
@@ -55,87 +65,136 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
     setCategories([]);
     setAccounts([]);
     setLoadedHouseholdId(null);
-    setError(null);
+    setSetupError(null);
+    setDataError(null);
 
     if (!householdId) {
-      setLoading(false);
+      setSetupLoading(false);
+      setDataLoading(false);
       return;
     }
 
-    setLoading(true);
-    let settled = 0;
-    let hasFailed = false;
+    setSetupLoading(true);
+    setDataLoading(true);
 
-    const done = () => {
-      settled++;
-      if (settled >= 4 && !hasFailed) {
+    let householdSettled = false;
+    let membersSettled = false;
+    let hasSetupFailed = false;
+
+    const checkSetupSettled = () => {
+      if (householdSettled && membersSettled && !hasSetupFailed) {
         setLoadedHouseholdId(householdId);
-        setLoading(false);
+        setSetupLoading(false);
       }
     };
 
-    const handleError = (err: Error) => {
-      console.error("Household listener error:", err);
-      hasFailed = true;
-      setError(err);
-      setLoading(false);
+    const handleSetupError = (err: Error) => {
+      console.error("Household setup listener error:", err);
+      hasSetupFailed = true;
+      setSetupError(err);
+      setSetupLoading(false);
     };
 
-    const unsubs: (() => void)[] = [
-      subscribeHousehold(
-        householdId,
-        (h) => {
-          setHousehold(h);
-          markSynced();
-          done();
-        },
-        handleError
-      ),
-      subscribeMembers(
-        householdId,
-        (m) => {
-          setMembers(m);
-          markSynced();
-          done();
-        },
-        handleError
-      ),
-      subscribeCategories(
-        householdId,
-        (c) => {
-          setCategories(c.filter((x) => !x.archived));
-          markSynced();
-          done();
-        },
-        handleError
-      ),
-      subscribeAccounts(
-        householdId,
-        (a) => {
-          setAccounts(a.filter((x) => !x.archived));
-          markSynced();
-          done();
-        },
-        handleError
-      ),
-    ];
-    return () => unsubs.forEach((u) => u());
+    // 1. Core setup listeners (required for setup completion)
+    const unsubHousehold = subscribeHousehold(
+      householdId,
+      (h) => {
+        setHousehold(h);
+        householdSettled = true;
+        markSynced();
+        checkSetupSettled();
+      },
+      handleSetupError
+    );
+
+    const unsubMembers = subscribeMembers(
+      householdId,
+      (m) => {
+        setMembers(m);
+        membersSettled = true;
+        markSynced();
+        checkSetupSettled();
+      },
+      handleSetupError
+    );
+
+    // 2. Application data listeners (optional; failure MUST NOT block setup completion)
+    let categoriesSettled = false;
+    let accountsSettled = false;
+    const checkDataSettled = () => {
+      if (categoriesSettled && accountsSettled) {
+        setDataLoading(false);
+      }
+    };
+
+    const unsubCategories = subscribeCategories(
+      householdId,
+      (c) => {
+        setCategories(c.filter((x) => !x.archived));
+        categoriesSettled = true;
+        markSynced();
+        checkDataSettled();
+      },
+      (err) => {
+        console.warn("Categories listener error (non-blocking):", err);
+        categoriesSettled = true;
+        setDataError(err);
+        checkDataSettled();
+      }
+    );
+
+    const unsubAccounts = subscribeAccounts(
+      householdId,
+      (a) => {
+        setAccounts(a.filter((x) => !x.archived));
+        accountsSettled = true;
+        markSynced();
+        checkDataSettled();
+      },
+      (err) => {
+        console.warn("Accounts listener error (non-blocking):", err);
+        accountsSettled = true;
+        setDataError(err);
+        checkDataSettled();
+      }
+    );
+
+    return () => {
+      unsubHousehold();
+      unsubMembers();
+      unsubCategories();
+      unsubAccounts();
+    };
   }, [householdId, retryNonce]);
 
-  // Synchronously compute whether the current householdId is resolving
-  const isHouseholdResolving = Boolean(householdId) && (loading || loadedHouseholdId !== householdId);
+  // Synchronously compute whether the current household setup is resolving
+  const isHouseholdResolving = Boolean(householdId) && (setupLoading || loadedHouseholdId !== householdId);
 
   const setupState = useMemo<SetupState>(() => {
     return resolveSetupState({
       authLoading,
       user,
+      profileLoading,
+      profileStatus,
       profile,
+      profileError,
       householdLoading: isHouseholdResolving,
       household,
       members,
-      error,
+      error: setupError,
     });
-  }, [authLoading, user, profile, isHouseholdResolving, household, members, error]);
+  }, [
+    authLoading,
+    user,
+    profileLoading,
+    profileStatus,
+    profile,
+    profileError,
+    isHouseholdResolving,
+    household,
+    members,
+    setupError,
+  ]);
 
   const value = useMemo<HouseholdState>(() => {
     const me = members.find((m) => m.uid === profile?.uid) ?? null;
@@ -151,10 +210,24 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
       memberUids: members.map((m) => m.uid),
       loading: isHouseholdResolving,
       setupState,
-      error,
+      error: setupError,
+      dataLoading,
+      dataError,
       retry,
     };
-  }, [householdId, household, members, categories, accounts, isHouseholdResolving, profile?.uid, setupState, error]);
+  }, [
+    householdId,
+    household,
+    members,
+    categories,
+    accounts,
+    isHouseholdResolving,
+    profile?.uid,
+    setupState,
+    setupError,
+    dataLoading,
+    dataError,
+  ]);
 
   return <HouseholdContext.Provider value={value}>{children}</HouseholdContext.Provider>;
 }

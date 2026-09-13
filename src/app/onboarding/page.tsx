@@ -81,7 +81,7 @@ export default function OnboardingPage() {
   if (setupState === "complete" && step !== 2 && !busy) {
     return <PageLoader label="Redirecting to dashboard…" />;
   }
-  if (!user || !profile) {
+  if (!user || (!profile && setupState !== "needs_profile")) {
     return <PageLoader label="Preparing onboarding…" />;
   }
 
@@ -117,8 +117,21 @@ export default function OnboardingPage() {
     setBusy(true);
     setError(null);
     try {
+      const fallbackProfile: any = profile || {
+        uid: user!.uid,
+        displayName: name.trim() || user!.displayName || "Partner",
+        email: user!.email ?? "",
+        photoURL,
+        currency,
+        householdId: null,
+        role: null,
+        country: country.trim(),
+        phone: phone.trim(),
+        timezone: "UTC",
+        notificationPrefs: { emailWeekly: true, emailOverBudget: true, pushActivity: true },
+      };
       const { id, inviteCode } = await createHousehold(
-        { ...profile!, displayName: name.trim() || profile!.displayName, photoURL },
+        { ...fallbackProfile, displayName: name.trim() || fallbackProfile.displayName, photoURL },
         householdName.trim(),
         currency
       );

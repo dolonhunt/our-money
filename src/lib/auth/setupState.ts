@@ -6,14 +6,19 @@ export type SetupState =
   | "complete"
   | "error";
 
+export type ProfileStatus = "idle" | "loading" | "missing" | "loaded" | "error";
+
 export interface ResolveSetupStateParams {
   authLoading: boolean;
   user: { uid: string } | null;
+  profileLoading?: boolean;
+  profileStatus?: ProfileStatus;
   profile: { uid: string; householdId?: string | null } | null;
   householdLoading: boolean;
   household: { id: string; ownerUid: string } | null;
   members: Array<{ uid: string; role?: string }>;
   error?: Error | string | null;
+  profileError?: Error | string | null;
 }
 
 /**
@@ -24,15 +29,26 @@ export interface ResolveSetupStateParams {
  * - error: network/permission/listener failure; safe error state. Do not redirect. Do not mutate Firestore.
  * - loading: auth/profile/household/membership unresolved; render skeleton only.
  * - unauthorized: redirect /login.
- * - needs_profile: verified authenticated user without profile; redirect /onboarding.
+ * - needs_profile: verified authenticated user without profile (lookup completed and confirmed missing); redirect /onboarding.
  * - needs_household: verified profile loaded and no active household membership; redirect /onboarding.
  * - complete: profile + household + active membership + valid role verified.
  */
 export function resolveSetupState(params: ResolveSetupStateParams): SetupState {
-  const { authLoading, user, profile, householdLoading, household, members, error } = params;
+  const {
+    authLoading,
+    user,
+    profileLoading,
+    profileStatus,
+    profile,
+    householdLoading,
+    household,
+    members,
+    error,
+    profileError,
+  } = params;
 
   // 1. Network / permission / listener failure
-  if (error) {
+  if (error || profileError || profileStatus === "error") {
     return "error";
   }
 
@@ -46,27 +62,37 @@ export function resolveSetupState(params: ResolveSetupStateParams): SetupState {
     return "unauthorized";
   }
 
-  // 4. Authenticated user without profile document
-  if (!profile) {
-    return "needs_profile";
+  // 4. Profile is still resolving / loading
+  if (profileLoading === true || profileStatus === "loading") {
+    return "loading";
   }
 
-  // 5. User profile has no household linked
+  // 5. Authenticated user without profile document
+  if (!profile) {
+    // Only return "needs_profile" if profile lookup has completed and confirmed missing
+    if (profileLoading === false || profileStatus === "missing") {
+      return "needs_profile";
+    }
+    // Profile is still unresolved
+    return "loading";
+  }
+
+  // 6. User profile has no household linked
   if (!profile.householdId) {
     return "needs_household";
   }
 
-  // 6. User has a householdId on their profile, but household document/members are still resolving
+  // 7. User has a householdId on their profile, but household document/members are still resolving
   if (householdLoading) {
     return "loading";
   }
 
-  // 7. Subscriptions settled: verify household document actually exists
+  // 8. Subscriptions settled: verify household document actually exists
   if (!household) {
     return "needs_household";
   }
 
-  // 8. Verify active membership record exists
+  // 9. Verify active membership record exists
   const userMember = members.find((m) => m.uid === user.uid);
   if (!userMember) {
     return "needs_household";

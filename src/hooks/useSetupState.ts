@@ -9,7 +9,16 @@ import type { SetupState } from "@/lib/auth/setupState";
  * Shared by login, onboarding guard, protected app layout, and root router.
  */
 export function useSetupState() {
-  const { user, profile, loading: authLoading, logout } = useAuth();
+  const {
+    user,
+    profile,
+    authLoading,
+    profileLoading,
+    profileStatus,
+    profileError,
+    refreshProfile,
+    logout,
+  } = useAuth();
   const {
     householdId,
     household,
@@ -20,9 +29,16 @@ export function useSetupState() {
     partner,
     loading: householdLoading,
     setupState,
-    error,
-    retry,
+    error: householdError,
+    dataLoading,
+    dataError,
+    retry: retryHousehold,
   } = useHousehold();
+
+  const retry = () => {
+    refreshProfile();
+    retryHousehold();
+  };
 
   return {
     setupState,
@@ -36,9 +52,14 @@ export function useSetupState() {
     me,
     partner,
     authLoading,
+    profileLoading,
+    profileStatus,
+    profileError,
     householdLoading,
+    dataLoading,
+    dataError,
     loading: setupState === "loading",
-    error,
+    error: householdError || profileError,
     retry,
     logout,
   };
