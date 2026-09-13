@@ -37,7 +37,8 @@ service cloud.firestore {
       // name + inviteCode to someone who already holds a link (PRD §62).
       // list: restricted to members.
       allow get: if signedIn();
-      allow list: if isHouseholdMember(hId);
+      allow list: if isHouseholdMember(hId)
+        || (signedIn() && resource.data.ownerUid == request.auth.uid);
 
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid;

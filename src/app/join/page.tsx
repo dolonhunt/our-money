@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Heart } from "lucide-react";
@@ -22,6 +22,7 @@ function JoinInner() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   useEffect(() => {
     if (loading) return;
@@ -33,12 +34,14 @@ function JoinInner() {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (isSubmittingRef.current || busy) return;
     setError(null);
     const parsed = parseInvite(code);
     if (!parsed) {
       setError("Paste the full invite link or code your partner shared.");
       return;
     }
+    isSubmittingRef.current = true;
     setBusy(true);
     try {
       await joinHousehold(profile!, parsed.householdId, parsed.code);
@@ -47,6 +50,7 @@ function JoinInner() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't join. Check the invite and try again.");
     } finally {
+      isSubmittingRef.current = false;
       setBusy(false);
     }
   }
@@ -76,7 +80,7 @@ function JoinInner() {
                 autoFocus
               />
             </Field>
-            <NeuButton type="submit" variant="primary" size="lg" loading={busy} className="w-full">
+            <NeuButton type="submit" variant="primary" size="lg" loading={busy} disabled={busy} className="w-full">
               Join money space
             </NeuButton>
             <p className="text-center text-[13px] text-sub">

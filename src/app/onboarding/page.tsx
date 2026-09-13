@@ -31,7 +31,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const toast = useToast();
 
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState<number>(0);
   const [name, setName] = useState("");
   const [photoURL, setPhotoURL] = useState<string | null>(null);
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
@@ -43,6 +43,36 @@ export default function OnboardingPage() {
   const [invite, setInvite] = useState<{ link: string; code: string } | null>(null);
   const [copied, setCopied] = useState<"link" | "code" | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const isSubmittingRef = useRef(false);
+  const hasInitializedStepRef = useRef(false);
+
+  const updateStep = (newStep: number) => {
+    setStep(newStep);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("om_onboarding_step", String(newStep));
+    }
+  };
+
+  // Restore saved session state on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const savedInvite = sessionStorage.getItem("om_onboarding_invite");
+    if (savedInvite) {
+      try {
+        setInvite(JSON.parse(savedInvite));
+      } catch {
+        /* ignore */
+      }
+    }
+    const savedStep = sessionStorage.getItem("om_onboarding_step");
+    if (savedStep !== null) {
+      const parsed = parseInt(savedStep, 10);
+      if (!isNaN(parsed) && parsed >= 0 && parsed <= 2) {
+        setStep(parsed);
+        hasInitializedStepRef.current = true;
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (setupState === "loading" || setupState === "error") return;
@@ -50,7 +80,8 @@ export default function OnboardingPage() {
       router.replace("/login");
       return;
     }
-    if (setupState === "complete" && step !== 2 && !busy) {
+    // If setup is already complete and user is not viewing invite step or submitting, send to dashboard
+    if (setupState === "complete" && step !== 2 && !busy && !invite) {
       router.replace("/dashboard");
       return;
     }
@@ -64,21 +95,35 @@ export default function OnboardingPage() {
         const first = profile.displayName.split(" ")[0];
         setHouseholdName(`${first} + Partner`);
       }
+      // If user arrives with profile already complete but needs household, start at step 1
+      if (!hasInitializedStepRef.current && profile.displayName && setupState === "needs_household") {
+        hasInitializedStepRef.current = true;
+        setStep(1);
+      }
     }
-  }, [setupState, step, busy, profile, router, householdName]);
+  }, [setupState, step, busy, invite, profile, router, householdName]);
 
   const origin = useMemo(() => (typeof window !== "undefined" ? window.location.origin : ""), []);
+
+  const finishOnboarding = () => {
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("om_onboarding_step");
+      sessionStorage.removeItem("om_onboarding_invite");
+    }
+    router.replace("/dashboard");
+  };
 
   if (setupState === "error") {
     return <SafeErrorView onRetry={retry} message={setupError?.message} />;
   }
-  if (setupState === "loading") {
+  // Only show full page loader if in step 0 before any interaction
+  if (setupState === "loading" && step === 0 && !invite) {
     return <PageLoader label="Preparing onboarding…" />;
   }
   if (setupState === "unauthorized") {
     return <PageLoader label="Redirecting to login…" />;
   }
-  if (setupState === "complete" && step !== 2 && !busy) {
+  if (setupState === "complete" && step !== 2 && !busy && !invite) {
     return <PageLoader label="Redirecting to dashboard…" />;
   }
   if (!user || (!profile && setupState !== "needs_profile")) {
@@ -103,7 +148,7 @@ export default function OnboardingPage() {
     setError(null);
     try {
       await updateUserProfile(user!.uid, { displayName: name.trim(), photoURL, currency, country: country.trim(), phone: phone.trim() });
-      setStep(1);
+      updateStep(1);
     } catch (err) {
       console.error("Failed to save profile:", err);
       setError("Couldn't save your profile. Try again.");
@@ -113,7 +158,9 @@ export default function OnboardingPage() {
   }
 
   async function createSpace() {
+    if (isSubmittingRef.current || busy) return;
     if (!householdName.trim()) return setError("Give your money space a name.");
+    isSubmittingRef.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -130,17 +177,25 @@ export default function OnboardingPage() {
         timezone: "UTC",
         notificationPrefs: { emailWeekly: true, emailOverBudget: true, pushActivity: true },
       };
-      const { id, inviteCode } = await createHousehold(
+      const result = await createHousehold(
         { ...fallbackProfile, displayName: name.trim() || fallbackProfile.displayName, photoURL },
         householdName.trim(),
         currency
       );
-      setInvite({ link: `${origin}/join?h=${id}&c=${inviteCode}`, code: `${id}.${inviteCode}` });
-      setStep(2);
+      const inviteData = {
+        link: `${origin}/join?h=${result.id}&c=${result.inviteCode}`,
+        code: `${result.id}.${result.inviteCode}`,
+      };
+      setInvite(inviteData);
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("om_onboarding_invite", JSON.stringify(inviteData));
+      }
+      updateStep(2);
     } catch (err) {
       console.error("Failed to create money space:", err);
-      setError("Couldn't create the money space. Try again.");
+      setError(err instanceof Error ? err.message : "Couldn't create the money space. Try again.");
     } finally {
+      isSubmittingRef.current = false;
       setBusy(false);
     }
   }
@@ -238,7 +293,7 @@ export default function OnboardingPage() {
                 <Field label="Space name" htmlFor="ob-hh">
                   <NeuInput id="ob-hh" value={householdName} onChange={(e) => setHouseholdName(e.target.value)} placeholder="e.g. Dolon + Partner" />
                 </Field>
-                <NeuButton variant="primary" loading={busy} onClick={createSpace}>
+                <NeuButton variant="primary" loading={busy} disabled={busy} onClick={createSpace}>
                   Create money space
                 </NeuButton>
               </div>
@@ -253,11 +308,11 @@ export default function OnboardingPage() {
                     <p className="text-[12.5px] text-sub">Have an invite link or code from them?</p>
                   </div>
                 </div>
-                <NeuButton onClick={() => router.push("/join")}>Use invite</NeuButton>
+                <NeuButton disabled={busy} onClick={() => router.push("/join")}>Use invite</NeuButton>
               </div>
 
               {error && <p className="text-[13px] font-medium text-danger" role="alert">{error}</p>}
-              <button onClick={() => setStep(0)} className="text-[13px] font-semibold text-sub hover:text-ink">
+              <button onClick={() => updateStep(0)} disabled={busy} className="text-[13px] font-semibold text-sub hover:text-ink">
                 ← Back to profile
               </button>
             </motion.div>
@@ -295,7 +350,7 @@ export default function OnboardingPage() {
                 Send by email instead
               </a>
 
-              <NeuButton variant="primary" size="lg" onClick={() => router.replace("/dashboard")} className="w-full">
+              <NeuButton variant="primary" size="lg" onClick={finishOnboarding} className="w-full">
                 Go to dashboard — I&rsquo;ll invite later
               </NeuButton>
               <button onClick={logout} className="mx-auto flex items-center gap-1.5 text-[12.5px] font-semibold text-sub hover:text-ink">
