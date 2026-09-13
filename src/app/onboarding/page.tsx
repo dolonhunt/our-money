@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Copy, Heart, LogOut, UserPlus, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSetupState } from "@/hooks/useSetupState";
 import { useToast } from "@/contexts/ToastContext";
 import { PageLoader } from "@/components/ui/feedback";
+import { SafeErrorView } from "@/components/layout/SafeErrorView";
 import { Avatar, Field, NeuButton, NeuInput, NeuSelect } from "@/components/ui/primitives";
 import { Logo } from "@/components/brand";
 import { updateUserProfile } from "@/lib/firebase/auth";
@@ -24,7 +26,8 @@ const CURRENCIES = [
 ];
 
 export default function OnboardingPage() {
-  const { user, profile, loading, logout } = useAuth();
+  const { user, profile, logout } = useAuth();
+  const { setupState, error: setupError, retry } = useSetupState();
   const router = useRouter();
   const toast = useToast();
 
@@ -42,30 +45,45 @@ export default function OnboardingPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (loading) return;
-    if (!user) {
+    if (setupState === "loading" || setupState === "error") return;
+    if (setupState === "unauthorized") {
       router.replace("/login");
       return;
     }
-    if (profile?.householdId && step !== 2) {
+    if (setupState === "complete" && step !== 2 && !busy) {
       router.replace("/dashboard");
       return;
     }
-    setName(profile?.displayName ?? "");
-    setPhotoURL(profile?.photoURL ?? null);
-    setCurrency(profile?.currency || DEFAULT_CURRENCY);
-    setCountry(profile?.country ?? "");
-    setPhone(profile?.phone ?? "");
-    if (!householdName && profile?.displayName) {
-      const first = profile.displayName.split(" ")[0];
-      setHouseholdName(`${first} + Partner`);
+    if (profile) {
+      setName((prev) => prev || (profile.displayName ?? ""));
+      setPhotoURL((prev) => prev || (profile.photoURL ?? null));
+      setCurrency((prev) => prev || (profile.currency || DEFAULT_CURRENCY));
+      setCountry((prev) => prev || (profile.country ?? ""));
+      setPhone((prev) => prev || (profile.phone ?? ""));
+      if (!householdName && profile.displayName) {
+        const first = profile.displayName.split(" ")[0];
+        setHouseholdName(`${first} + Partner`);
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, user, profile]);
+  }, [setupState, step, busy, profile, router, householdName]);
 
   const origin = useMemo(() => (typeof window !== "undefined" ? window.location.origin : ""), []);
 
-  if (loading || !user || !profile) return <PageLoader label="Preparing onboarding…" />;
+  if (setupState === "error") {
+    return <SafeErrorView onRetry={retry} message={setupError?.message} />;
+  }
+  if (setupState === "loading") {
+    return <PageLoader label="Preparing onboarding…" />;
+  }
+  if (setupState === "unauthorized") {
+    return <PageLoader label="Redirecting to login…" />;
+  }
+  if (setupState === "complete" && step !== 2 && !busy) {
+    return <PageLoader label="Redirecting to dashboard…" />;
+  }
+  if (!user || !profile) {
+    return <PageLoader label="Preparing onboarding…" />;
+  }
 
   async function uploadAvatar(file: File) {
     setBusy(true);

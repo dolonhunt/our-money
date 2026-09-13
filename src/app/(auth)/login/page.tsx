@@ -4,11 +4,13 @@ import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FriendlyAuthError, useAuth } from "@/contexts/AuthContext";
+import { useSetupState } from "@/hooks/useSetupState";
 import { Field, NeuButton, NeuInput } from "@/components/ui/primitives";
 import { isFirebaseConfigured, firebaseSetupHint } from "@/lib/firebase/config";
 
 export default function LoginPage() {
-  const { login, loginWithGoogle, user, profile, loading } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
+  const { setupState } = useSetupState();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,9 +18,13 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (loading || !user) return;
-    router.replace(profile && !profile.householdId ? "/onboarding" : "/dashboard");
-  }, [loading, user, profile, router]);
+    if (setupState === "loading" || setupState === "unauthorized" || setupState === "error") return;
+    if (setupState === "complete") {
+      router.replace("/dashboard");
+    } else if (setupState === "needs_profile" || setupState === "needs_household") {
+      router.replace("/onboarding");
+    }
+  }, [setupState, router]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();

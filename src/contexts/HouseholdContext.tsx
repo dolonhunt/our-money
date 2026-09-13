@@ -1,13 +1,12 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Account, Category, Household, HouseholdMember, UserProfile } from "@/types";
 import { subscribeHousehold, subscribeMembers } from "@/lib/firebase/households";
 import { subscribeCategories } from "@/lib/firebase/categories";
 import { subscribeAccounts } from "@/lib/firebase/accounts";
-import { setUserHousehold } from "@/lib/firebase/auth";
 import { markSynced } from "@/lib/sync";
+import { resolveSetupState, type SetupState } from "@/lib/auth/setupState";
 import { useAuth } from "./AuthContext";
 
 interface HouseholdState {
@@ -20,6 +19,9 @@ interface HouseholdState {
   partner: HouseholdMember | null;
   memberUids: string[];
   loading: boolean;
+  setupState: SetupState;
+  error: Error | null;
+  retry: () => void;
 }
 
 const HouseholdContext = createContext<HouseholdState | null>(null);
@@ -31,31 +33,54 @@ export function useHousehold(): HouseholdState {
 }
 
 export function HouseholdProvider({ children }: { children: ReactNode }) {
-  const { profile } = useAuth();
-  const router = useRouter();
+  const { user, profile, loading: authLoading } = useAuth();
   const householdId = profile?.householdId ?? null;
   const [household, setHousehold] = useState<Household | null>(null);
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [loading, setLoading] = useState(true);
-  const removalHandled = useRef(false);
+  const [loadedHouseholdId, setLoadedHouseholdId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
+
+  const retry = () => {
+    setError(null);
+    setRetryNonce((n) => n + 1);
+  };
 
   useEffect(() => {
     setHousehold(null);
     setMembers([]);
     setCategories([]);
     setAccounts([]);
+    setLoadedHouseholdId(null);
+    setError(null);
+
     if (!householdId) {
       setLoading(false);
       return;
     }
+
     setLoading(true);
     let settled = 0;
+    let hasFailed = false;
+
     const done = () => {
       settled++;
-      if (settled >= 4) setLoading(false);
+      if (settled >= 4 && !hasFailed) {
+        setLoadedHouseholdId(householdId);
+        setLoading(false);
+      }
     };
+
+    const handleError = (err: Error) => {
+      console.error("Household listener error:", err);
+      hasFailed = true;
+      setError(err);
+      setLoading(false);
+    };
+
     const unsubs: (() => void)[] = [
       subscribeHousehold(
         householdId,
@@ -64,7 +89,7 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
           markSynced();
           done();
         },
-        done
+        handleError
       ),
       subscribeMembers(
         householdId,
@@ -73,7 +98,7 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
           markSynced();
           done();
         },
-        done
+        handleError
       ),
       subscribeCategories(
         householdId,
@@ -82,7 +107,7 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
           markSynced();
           done();
         },
-        done
+        handleError
       ),
       subscribeAccounts(
         householdId,
@@ -91,27 +116,26 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
           markSynced();
           done();
         },
-        done
+        handleError
       ),
     ];
     return () => unsubs.forEach((u) => u());
-  }, [householdId]);
+  }, [householdId, retryNonce]);
 
-  // Membership revoked (removed by owner, or dissolved household): clear the
-  // stale profile link ourselves — security rules forbid cross-user writes.
-  useEffect(() => {
-    if (!householdId || !profile || removalHandled.current || loading) return;
-    const isOwner = household?.ownerUid === profile.uid;
-    const householdDissolved = !loading && household === null;
-    const explicitlyRemoved = !loading && members.length > 0 && !members.some((m) => m.uid === profile.uid) && !isOwner;
+  // Synchronously compute whether the current householdId is resolving
+  const isHouseholdResolving = Boolean(householdId) && (loading || loadedHouseholdId !== householdId);
 
-    if (householdDissolved || explicitlyRemoved) {
-      removalHandled.current = true;
-      setUserHousehold(profile.uid, null, null)
-        .then(() => router.replace("/onboarding"))
-        .catch(() => undefined);
-    }
-  }, [householdId, household, members, loading, profile, router]);
+  const setupState = useMemo<SetupState>(() => {
+    return resolveSetupState({
+      authLoading,
+      user,
+      profile,
+      householdLoading: isHouseholdResolving,
+      household,
+      members,
+      error,
+    });
+  }, [authLoading, user, profile, isHouseholdResolving, household, members, error]);
 
   const value = useMemo<HouseholdState>(() => {
     const me = members.find((m) => m.uid === profile?.uid) ?? null;
@@ -125,9 +149,12 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
       me,
       partner,
       memberUids: members.map((m) => m.uid),
-      loading: loading && Boolean(householdId),
+      loading: isHouseholdResolving,
+      setupState,
+      error,
+      retry,
     };
-  }, [householdId, household, members, categories, accounts, loading, profile?.uid]);
+  }, [householdId, household, members, categories, accounts, isHouseholdResolving, profile?.uid, setupState, error]);
 
   return <HouseholdContext.Provider value={value}>{children}</HouseholdContext.Provider>;
 }

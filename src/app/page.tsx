@@ -2,20 +2,29 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/contexts/AuthContext";
-import { PageLoader } from "@/components/ui/feedback";
+import { useSetupState } from "@/hooks/useSetupState";
+import { AppShellSkeleton } from "@/components/layout/AppShellSkeleton";
+import { SafeErrorView } from "@/components/layout/SafeErrorView";
 
-/** Entry redirect: authenticated → dashboard, else → login. */
+/** Entry redirect: resolves setupState before routing. */
 export default function Home() {
-  const { user, profile, loading } = useAuth();
+  const { setupState, error, retry } = useSetupState();
   const router = useRouter();
 
   useEffect(() => {
-    if (loading) return;
-    if (!user) router.replace("/login");
-    else if (profile && !profile.householdId) router.replace("/onboarding");
-    else router.replace("/dashboard");
-  }, [loading, user, profile, router]);
+    if (setupState === "loading" || setupState === "error") return;
+    if (setupState === "unauthorized") {
+      router.replace("/login");
+    } else if (setupState === "complete") {
+      router.replace("/dashboard");
+    } else if (setupState === "needs_profile" || setupState === "needs_household") {
+      router.replace("/onboarding");
+    }
+  }, [setupState, router]);
 
-  return <PageLoader label="Our Money" />;
+  if (setupState === "error") {
+    return <SafeErrorView onRetry={retry} message={error?.message} />;
+  }
+
+  return <AppShellSkeleton />;
 }

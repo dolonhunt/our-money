@@ -3,10 +3,10 @@
 import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeftRight, Banknote, Receipt, Target, TrendingDown } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
-import { useHousehold } from "@/contexts/HouseholdContext";
+import { useSetupState } from "@/hooks/useSetupState";
+import { AppShellSkeleton } from "./AppShellSkeleton";
+import { SafeErrorView } from "./SafeErrorView";
 import { QuickAddProvider, useQuickAdd } from "@/contexts/QuickAddContext";
-import { PageLoader } from "@/components/ui/feedback";
 import { Sidebar } from "./Sidebar";
 import { AppHeader } from "./AppHeader";
 import { MobileNav } from "./MobileNav";
@@ -18,17 +18,24 @@ import { BillFormModal } from "@/components/bills/BillForm";
  * user without household → /onboarding (PRD §14–15).
  */
 export function AppShell({ children }: { children: ReactNode }) {
-  const { user, profile, loading } = useAuth();
+  const { setupState, error, retry } = useSetupState();
   const router = useRouter();
 
   useEffect(() => {
-    if (loading) return;
-    if (!user) router.replace("/login");
-    else if (profile && !profile.householdId) router.replace("/onboarding");
-  }, [loading, user, profile, router]);
+    if (setupState === "loading" || setupState === "error") return;
+    if (setupState === "unauthorized") {
+      router.replace("/login");
+    } else if (setupState === "needs_profile" || setupState === "needs_household") {
+      router.replace("/onboarding");
+    }
+  }, [setupState, router]);
 
-  if (loading || !user || (profile && !profile.householdId)) {
-    return <PageLoader label="Getting your money space ready…" />;
+  if (setupState === "error") {
+    return <SafeErrorView onRetry={retry} message={error?.message} />;
+  }
+
+  if (setupState !== "complete") {
+    return <AppShellSkeleton />;
   }
 
   return (
