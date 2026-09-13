@@ -29,6 +29,11 @@ service cloud.firestore {
       allow delete: if false; // profiles are never hard-deleted (v1)
     }
 
+    /* ----------------- member collection group query ----------------- */
+    match /{path=**}/members/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+    }
+
     /* --------------------------- households ---------------------------- */
     match /households/{hId} {
 

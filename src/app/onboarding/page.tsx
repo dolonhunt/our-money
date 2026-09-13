@@ -11,8 +11,8 @@ import { PageLoader } from "@/components/ui/feedback";
 import { SafeErrorView } from "@/components/layout/SafeErrorView";
 import { Avatar, Field, NeuButton, NeuInput, NeuSelect } from "@/components/ui/primitives";
 import { Logo } from "@/components/brand";
-import { updateUserProfile } from "@/lib/firebase/auth";
-import { createHousehold } from "@/lib/firebase/households";
+import { updateUserProfile, setUserHousehold } from "@/lib/firebase/auth";
+import { createHousehold, findExistingUserHousehold } from "@/lib/firebase/households";
 import { getFirebaseApp } from "@/lib/firebase/config";
 import { uploadFile } from "@/lib/supabase";
 import { DEFAULT_CURRENCY } from "@/lib/currency";
@@ -31,7 +31,18 @@ export default function OnboardingPage() {
   const router = useRouter();
   const toast = useToast();
 
-  const [step, setStep] = useState<number>(0);
+  const [step, setStep] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const savedStep = sessionStorage.getItem("om_onboarding_step");
+      if (savedStep !== null) {
+        const parsed = parseInt(savedStep, 10);
+        if (!isNaN(parsed) && parsed >= 0 && parsed <= 2) {
+          return parsed;
+        }
+      }
+    }
+    return 0;
+  });
   const [name, setName] = useState("");
   const [photoURL, setPhotoURL] = useState<string | null>(null);
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
@@ -40,11 +51,25 @@ export default function OnboardingPage() {
   const [householdName, setHouseholdName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [invite, setInvite] = useState<{ link: string; code: string } | null>(null);
+  const [invite, setInvite] = useState<{ link: string; code: string } | null>(() => {
+    if (typeof window !== "undefined") {
+      const savedInvite = sessionStorage.getItem("om_onboarding_invite");
+      if (savedInvite) {
+        try {
+          return JSON.parse(savedInvite);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    return null;
+  });
   const [copied, setCopied] = useState<"link" | "code" | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const isSubmittingRef = useRef(false);
+  const justCreatedRef = useRef(false);
   const hasInitializedStepRef = useRef(false);
+  const isRecoveringRef = useRef(false);
 
   const updateStep = (newStep: number) => {
     setStep(newStep);
@@ -53,26 +78,27 @@ export default function OnboardingPage() {
     }
   };
 
-  // Restore saved session state on mount
+  // Pre-flight check: if user needs_household, check if they already own or belong to one
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const savedInvite = sessionStorage.getItem("om_onboarding_invite");
-    if (savedInvite) {
-      try {
-        setInvite(JSON.parse(savedInvite));
-      } catch {
-        /* ignore */
-      }
+    if (setupState === "needs_household" && user && !isRecoveringRef.current) {
+      isRecoveringRef.current = true;
+      findExistingUserHousehold(user.uid, profile?.householdId)
+        .then(async (existing) => {
+          if (existing) {
+            toast.success("Found your existing money space. Reconnecting…");
+            await setUserHousehold(user.uid, existing.id, existing.role);
+            if (typeof window !== "undefined") {
+              sessionStorage.removeItem("om_onboarding_step");
+              sessionStorage.removeItem("om_onboarding_invite");
+            }
+            router.replace("/dashboard");
+          }
+        })
+        .catch((err) => {
+          console.warn("Pre-flight recovery check warning:", err);
+        });
     }
-    const savedStep = sessionStorage.getItem("om_onboarding_step");
-    if (savedStep !== null) {
-      const parsed = parseInt(savedStep, 10);
-      if (!isNaN(parsed) && parsed >= 0 && parsed <= 2) {
-        setStep(parsed);
-        hasInitializedStepRef.current = true;
-      }
-    }
-  }, []);
+  }, [setupState, user, profile?.householdId, router, toast]);
 
   useEffect(() => {
     if (setupState === "loading" || setupState === "error") return;
@@ -80,8 +106,12 @@ export default function OnboardingPage() {
       router.replace("/login");
       return;
     }
-    // If setup is already complete and user is not viewing invite step or submitting, send to dashboard
-    if (setupState === "complete" && step !== 2 && !busy && !invite) {
+    // If setup is already complete and user did not just create the household in this session, send to dashboard
+    if (setupState === "complete" && (!justCreatedRef.current || step !== 2) && !busy) {
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("om_onboarding_step");
+        sessionStorage.removeItem("om_onboarding_invite");
+      }
       router.replace("/dashboard");
       return;
     }
@@ -182,6 +212,12 @@ export default function OnboardingPage() {
         householdName.trim(),
         currency
       );
+      if (result.reused) {
+        toast.success("Connected to your existing money space.");
+        finishOnboarding();
+        return;
+      }
+      justCreatedRef.current = true;
       const inviteData = {
         link: `${origin}/join?h=${result.id}&c=${result.inviteCode}`,
         code: `${result.id}.${result.inviteCode}`,

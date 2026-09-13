@@ -1,5 +1,6 @@
 import {
   collection,
+  collectionGroup,
   deleteDoc,
   doc,
   getDoc,
@@ -35,7 +36,7 @@ export interface ExistingHouseholdResolution {
   id: string;
   household: Household;
   role: Role;
-  source: "profile" | "ownership" | "session";
+  source: "profile" | "ownership" | "session" | "membership";
 }
 
 // In-memory mutex maps to serialize concurrent requests in the same client runtime
@@ -53,16 +54,28 @@ export async function findExistingUserHousehold(
 ): Promise<ExistingHouseholdResolution | null> {
   const db = getDb();
 
-  // 1. Profile reference check
-  if (profileHouseholdId) {
+  // 1. Profile reference check (or user document lookup if profileHouseholdId is not provided)
+  let targetHhId = profileHouseholdId;
+  if (!targetHhId) {
     try {
-      const hhSnap = await getDoc(doc(db, "households", profileHouseholdId));
+      const userSnap = await getDoc(doc(db, "users", uid));
+      if (userSnap.exists()) {
+        targetHhId = userSnap.data()?.householdId ?? null;
+      }
+    } catch (err) {
+      console.warn("Error checking user doc for household link:", err);
+    }
+  }
+
+  if (targetHhId) {
+    try {
+      const hhSnap = await getDoc(doc(db, "households", targetHhId));
       if (hhSnap.exists()) {
-        const memSnap = await getDoc(doc(db, "households", profileHouseholdId, "members", uid));
+        const memSnap = await getDoc(doc(db, "households", targetHhId, "members", uid));
         if (memSnap.exists()) {
           const role = (memSnap.data()?.role as Role) || "owner";
           return {
-            id: profileHouseholdId,
+            id: targetHhId,
             household: { id: hhSnap.id, ...hhSnap.data() } as Household,
             role,
             source: "profile",
@@ -118,6 +131,35 @@ export async function findExistingUserHousehold(
     }
   } catch (err) {
     console.warn("Error querying owned households:", err);
+  }
+
+  // 3. Active membership check via collectionGroup("members")
+  try {
+    const memQuery = query(
+      collectionGroup(db, "members"),
+      where("uid", "==", uid),
+      limit(5)
+    );
+    const memSnap = await getDocs(memQuery);
+    if (!memSnap.empty) {
+      for (const memberDoc of memSnap.docs) {
+        const parentHhRef = memberDoc.ref.parent.parent;
+        if (parentHhRef) {
+          const hhSnap = await getDoc(parentHhRef);
+          if (hhSnap.exists()) {
+            const role = (memberDoc.data()?.role as Role) || "member";
+            return {
+              id: parentHhRef.id,
+              household: { id: hhSnap.id, ...hhSnap.data() } as Household,
+              role,
+              source: "membership",
+            };
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Error querying member collectionGroup:", err);
   }
 
   return null;
@@ -336,26 +378,7 @@ export async function joinHousehold(
   }
 }
 
-export interface JoinCodePayload {
-  householdId: string;
-  code: string;
-}
-
-/** Parse a pasted invite string ("householdId.code") or link (?h=..&c=..). */
-export function parseInvite(input: string): JoinCodePayload | null {
-  const trimmed = input.trim();
-  try {
-    const asUrl = new URL(trimmed);
-    const h = asUrl.searchParams.get("h");
-    const c = asUrl.searchParams.get("c");
-    if (h && c) return { householdId: h, code: c };
-  } catch {
-    /* not a URL — fall through */
-  }
-  const m = trimmed.match(/^([A-Za-z0-9]{20,})[.\s]+([A-Za-z0-9]{4,10})$/);
-  if (m) return { householdId: m[1], code: m[2] };
-  return null;
-}
+export { parseInvite, type JoinCodePayload } from "../invites";
 
 /** Real-time household document. */
 export function subscribeHousehold(

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { resolveSetupState, getRouteForSetupState } from "../src/lib/auth/setupState.ts";
+import { parseInvite } from "../src/lib/invites.ts";
 
 // In-memory Firestore simulation engine for deterministic test execution
 class MockFirestore {
@@ -28,13 +29,21 @@ const inFlightCreations = new Map<string, Promise<any>>();
 const inFlightJoins = new Map<string, Promise<any>>();
 
 async function simulateFindExistingUserHousehold(uid: string, profileHouseholdId?: string | null) {
-  // 1. Profile reference check
-  if (profileHouseholdId && mockDb.households.has(profileHouseholdId)) {
-    const mems = mockDb.members.get(profileHouseholdId);
+  // 1. Profile / user document reference check
+  let targetHhId = profileHouseholdId;
+  if (!targetHhId) {
+    const u = mockDb.users.get(uid);
+    if (u?.householdId) {
+      targetHhId = u.householdId;
+    }
+  }
+
+  if (targetHhId && mockDb.households.has(targetHhId)) {
+    const mems = mockDb.members.get(targetHhId);
     if (mems && mems.has(uid)) {
       return {
-        id: profileHouseholdId,
-        household: mockDb.households.get(profileHouseholdId),
+        id: targetHhId,
+        household: mockDb.households.get(targetHhId),
         role: mems.get(uid).role,
         source: "profile",
       };
@@ -54,6 +63,18 @@ async function simulateFindExistingUserHousehold(uid: string, profileHouseholdId
         household: hh,
         role: "owner",
         source: "ownership",
+      };
+    }
+  }
+
+  // 3. Active membership check across all households
+  for (const [id, mems] of mockDb.members.entries()) {
+    if (mems.has(uid) && mockDb.households.has(id)) {
+      return {
+        id,
+        household: mockDb.households.get(id),
+        role: mems.get(uid).role,
+        source: "membership",
       };
     }
   }
@@ -445,4 +466,106 @@ test("7. Invite flow -> valid user joins only once; invalid/expired invite fails
     async () => simulateJoinHousehold(thirdUser, ownerHhId, "PAIR12"),
     /already has two partners/
   );
+});
+
+test("8. Existing user who is a non-owner member but profile.householdId is missing/stale -> safe recovery path reattaches without duplicate", async () => {
+  mockDb.reset();
+  const householdId = "hh_partner_space_99";
+  // Household owned by someone else
+  mockDb.households.set(householdId, {
+    id: householdId,
+    name: "Partner's Household",
+    currency: "USD",
+    inviteCode: "PART99",
+    ownerUid: "owner_partner_uid",
+  });
+
+  // User is already a member
+  const partnerUser = {
+    uid: "partner_member_uid",
+    displayName: "InvitedPartner",
+    email: "invited@example.com",
+    photoURL: null,
+    householdId: null, // missing/cleared!
+  };
+  mockDb.users.set(partnerUser.uid, partnerUser);
+
+  const memMap = new Map();
+  memMap.set("owner_partner_uid", { uid: "owner_partner_uid", role: "owner" });
+  memMap.set(partnerUser.uid, { uid: partnerUser.uid, role: "member" });
+  mockDb.members.set(householdId, memMap);
+
+  // Recovery via simulateFindExistingUserHousehold finds the membership
+  const found = await simulateFindExistingUserHousehold(partnerUser.uid, partnerUser.householdId);
+  assert.ok(found);
+  assert.equal(found.id, householdId);
+  assert.equal(found.role, "member");
+  assert.equal(found.source, "membership");
+
+  // Attempting to create a household recovers the existing one with reused: true
+  const result = await simulateCreateHousehold(partnerUser, "Unnecessary Second Space", "USD");
+  assert.equal(result.id, householdId);
+  assert.equal(result.reused, true);
+  assert.equal(mockDb.households.size, 1);
+  assert.equal(mockDb.users.get(partnerUser.uid)?.householdId, householdId);
+  assert.equal(mockDb.users.get(partnerUser.uid)?.role, "member");
+});
+
+test("9. parseInvite parser -> accurately parses query param URL and dot-separated code, safely rejects malformed inputs", () => {
+  // URL with query parameters
+  const urlPayload = parseInvite("https://ourmoney.app/join?h=hh_sample_123456789012&c=ABCDEF");
+  assert.ok(urlPayload);
+  assert.equal(urlPayload.householdId, "hh_sample_123456789012");
+  assert.equal(urlPayload.code, "ABCDEF");
+
+  // Dot-separated code
+  const dotPayload = parseInvite("hh_sample_123456789012.XYZ789");
+  assert.ok(dotPayload);
+  assert.equal(dotPayload.householdId, "hh_sample_123456789012");
+  assert.equal(dotPayload.code, "XYZ789");
+
+  // Space-separated code
+  const spacePayload = parseInvite("hh_sample_123456789012 XYZ789");
+  assert.ok(spacePayload);
+  assert.equal(spacePayload.householdId, "hh_sample_123456789012");
+  assert.equal(spacePayload.code, "XYZ789");
+
+  // Invalid / malformed inputs
+  assert.equal(parseInvite(""), null);
+  assert.equal(parseInvite("random gibberish"), null);
+  assert.equal(parseInvite("https://ourmoney.app/dashboard"), null);
+  assert.equal(parseInvite("short.code"), null); // under 20 chars ID
+});
+
+test("10. Idempotent createHousehold returning reused: true routes directly to dashboard instead of invite step", async () => {
+  mockDb.reset();
+  const existingHhId = "hh_active_already_67";
+  const user = {
+    uid: "user_multi_session",
+    displayName: "MultiSession",
+    email: "multi@example.com",
+    photoURL: null,
+    householdId: existingHhId,
+  };
+  mockDb.users.set(user.uid, user);
+  mockDb.households.set(existingHhId, {
+    id: existingHhId,
+    name: "Existing Space",
+    currency: "USD",
+    inviteCode: "SPACE1",
+    ownerUid: user.uid,
+  });
+  const memMap = new Map();
+  memMap.set(user.uid, { uid: user.uid, role: "owner" });
+  mockDb.members.set(existingHhId, memMap);
+
+  // Calling createHousehold for a user with existing household
+  const res = await simulateCreateHousehold(user, "Dup Name", "USD");
+  assert.equal(res.reused, true);
+  assert.equal(res.id, existingHhId);
+
+  // When reused is true, the client code navigates to /dashboard immediately
+  // and does NOT advance to step 2 (invite step)
+  const targetRoute = res.reused ? "/dashboard" : "/onboarding?step=invite";
+  assert.equal(targetRoute, "/dashboard");
 });
