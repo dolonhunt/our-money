@@ -56,6 +56,8 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
   const retry = () => {
     setSetupError(null);
     setDataError(null);
+    setLoadedHouseholdId(null);
+    setSetupLoading(true);
     setRetryNonce((n) => n + 1);
   };
 

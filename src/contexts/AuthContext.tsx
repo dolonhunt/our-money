@@ -49,6 +49,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [refreshNonce, setRefreshNonce] = useState(0);
 
   const refreshProfile = () => {
+    setProfileError(null);
+    setProfileLoading(true);
+    setProfileStatus("loading");
     setRefreshNonce((n) => n + 1);
   };
 
@@ -59,42 +62,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfileStatus("missing");
       return;
     }
-    let unsubProfile: (() => void) | undefined;
     let unsubAuth: (() => void) | undefined;
     try {
       unsubAuth = onAuthStateChanged(getAuthInstance(), (u) => {
-        unsubProfile?.();
         setUser(u);
         setAuthLoading(false);
         if (u) {
           setProfileLoading(true);
           setProfileStatus("loading");
           setProfileError(null);
-
-          ensureUserProfile(u).catch(() => {
-            /* profile ensured on next tick; read may still succeed */
-          });
-
-          unsubProfile = onSnapshot(
-            doc(getDb(), "users", u.uid),
-            (snap) => {
-              if (snap.exists()) {
-                setProfile({ uid: snap.id, ...snap.data() } as UserProfile);
-                setProfileStatus("loaded");
-              } else {
-                setProfile(null);
-                setProfileStatus("missing");
-              }
-              setProfileLoading(false);
-              setProfileError(null);
-            },
-            (err) => {
-              console.error("Profile listener error:", err);
-              setProfileError(err);
-              setProfileStatus("error");
-              setProfileLoading(false);
-            }
-          );
         } else {
           setProfile(null);
           setProfileStatus("idle");
@@ -107,10 +83,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfileLoading(false);
     }
     return () => {
-      unsubProfile?.();
       unsubAuth?.();
     };
-  }, [refreshNonce]);
+  }, []);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured || authLoading) return;
+    if (!user) {
+      setProfile(null);
+      setProfileStatus("idle");
+      setProfileLoading(false);
+      setProfileError(null);
+      return;
+    }
+
+    setProfileLoading(true);
+    setProfileStatus("loading");
+    setProfileError(null);
+
+    ensureUserProfile(user).catch(() => {
+      /* profile ensured on next tick; read may still succeed */
+    });
+
+    let unsubProfile: (() => void) | undefined;
+    try {
+      unsubProfile = onSnapshot(
+        doc(getDb(), "users", user.uid),
+        (snap) => {
+          if (snap.exists()) {
+            setProfile({ uid: snap.id, ...snap.data() } as UserProfile);
+            setProfileStatus("loaded");
+          } else {
+            setProfile(null);
+            setProfileStatus("missing");
+          }
+          setProfileLoading(false);
+          setProfileError(null);
+        },
+        (err) => {
+          console.error("Profile listener error:", err);
+          setProfileError(err);
+          setProfileStatus("error");
+          setProfileLoading(false);
+        }
+      );
+    } catch (err) {
+      console.error("Profile listener attach error:", err);
+      setProfileError(err instanceof Error ? err : new Error(String(err)));
+      setProfileStatus("error");
+      setProfileLoading(false);
+    }
+
+    return () => {
+      unsubProfile?.();
+    };
+  }, [user, authLoading, refreshNonce]);
 
   const api = useMemo<AuthApi>(
     () => ({

@@ -62,15 +62,15 @@ export function resolveSetupState(params: ResolveSetupStateParams): SetupState {
     return "unauthorized";
   }
 
-  // 4. Profile is still resolving / loading
-  if (profileLoading === true || profileStatus === "loading") {
+  // 4. Profile is still resolving / loading / unresolved
+  if (profileLoading === true || profileStatus === "loading" || profileStatus === "idle") {
     return "loading";
   }
 
   // 5. Authenticated user without profile document
   if (!profile) {
     // Only return "needs_profile" if profile lookup has completed and confirmed missing
-    if (profileLoading === false || profileStatus === "missing") {
+    if (profileStatus === "missing" || (profileStatus === undefined && profileLoading === false)) {
       return "needs_profile";
     }
     // Profile is still unresolved

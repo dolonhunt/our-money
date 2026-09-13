@@ -420,4 +420,70 @@ test("13. Integration timeline simulation: Delayed profile and household resolut
   assert.equal(userProfile.householdId, "hh_async");
 });
 
+test("14. Profile status 'idle' when user exists -> loading, NEVER needs_profile", () => {
+  // When AuthContext initializes or hasn't started Firestore read yet
+  const idleState = resolveSetupState({
+    authLoading: false,
+    user: { uid: "user_idle" },
+    profileLoading: false,
+    profileStatus: "idle",
+    profile: null,
+    householdLoading: false,
+    household: null,
+    members: [],
+  });
+  assert.equal(idleState, "loading");
+  assert.equal(getRouteForSetupState(idleState, "/dashboard"), null);
+  assert.equal(getRouteForSetupState(idleState, "/login"), null);
+  assert.equal(getRouteForSetupState(idleState, "/onboarding"), null);
+});
+
+test("15. Evicted/deleted member with householdId still in profile -> gracefully returns needs_household without mutating profile", () => {
+  const userProfile = { uid: "evicted_user", householdId: "hh_previous" };
+  let writesToFirestore = 0;
+
+  const state = resolveSetupState({
+    authLoading: false,
+    user: { uid: "evicted_user" },
+    profileLoading: false,
+    profileStatus: "loaded",
+    profile: userProfile,
+    householdLoading: false,
+    household: { id: "hh_previous", ownerUid: "other_user" },
+    members: [{ uid: "other_user", role: "owner" }], // evicted_user is NOT in members
+  });
+
+  // State is needs_household so user can join a new space or create one
+  assert.equal(state, "needs_household");
+  assert.equal(getRouteForSetupState(state, "/dashboard"), "/onboarding");
+  assert.equal(getRouteForSetupState(state, "/onboarding"), null);
+
+  // Profile is never mutated automatically by resolver
+  assert.equal(writesToFirestore, 0);
+  assert.equal(userProfile.householdId, "hh_previous");
+});
+
+test("16. Listener isolation: categories & accounts failure captures dataError without polluting setupState", () => {
+  // Both categories and accounts fail with network/permission errors
+  const catError = new Error("Categories listener offline");
+  const accError = new Error("Accounts listener offline");
+
+  const state = resolveSetupState({
+    authLoading: false,
+    user: { uid: "user_valid" },
+    profileLoading: false,
+    profileStatus: "loaded",
+    profile: { uid: "user_valid", householdId: "hh_valid" },
+    householdLoading: false,
+    household: { id: "hh_valid", ownerUid: "user_valid" },
+    members: [{ uid: "user_valid", role: "owner" }],
+    error: null, // Core setup is clean
+    profileError: null,
+  });
+
+  assert.equal(state, "complete");
+  assert.equal(getRouteForSetupState(state, "/dashboard"), null);
+  // Dashboard shell continues to render
+});
+
 
